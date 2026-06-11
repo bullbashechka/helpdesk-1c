@@ -12,6 +12,10 @@ function getDatabasePath() {
   return resolve(process.cwd(), env.sqliteDbPath);
 }
 
+function getNodeMajorVersion() {
+  return Number.parseInt(process.versions.node.split('.')[0], 10);
+}
+
 function createDatabase(filePath) {
   mkdirSync(dirname(filePath), { recursive: true });
 
@@ -23,8 +27,22 @@ function createDatabase(filePath) {
       const { DatabaseSync } = require('node:sqlite');
       return new DatabaseSync(filePath);
     } catch (nodeSqliteError) {
+      const nodeMajorVersion = getNodeMajorVersion();
+      const versionHint =
+        nodeMajorVersion >= 24
+          ? 'Текущий Node 24+ должен поддерживать node:sqlite, но встроенный модуль недоступен в этой среде.'
+          : `Сейчас используется Node ${process.versions.node}. Для fallback через node:sqlite нужен Node 24+.`;
+
       throw new Error(
-        `SQLite driver is unavailable. better-sqlite3: ${betterSqliteError.message}; node:sqlite: ${nodeSqliteError.message}`,
+        [
+          'Не удалось открыть SQLite.',
+          versionHint,
+          'Варианты исправления:',
+          '1. Переключиться на Node 24+ и заново запустить проект.',
+          '2. Либо пересобрать better-sqlite3 под текущую версию Node.',
+          `better-sqlite3: ${betterSqliteError.message}`,
+          `node:sqlite: ${nodeSqliteError.message}`,
+        ].join(' '),
       );
     }
   }

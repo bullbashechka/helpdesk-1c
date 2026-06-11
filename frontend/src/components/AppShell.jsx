@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import { navigationItems } from '../sections.js';
 
 function getIsActive(currentPath, itemPath) {
@@ -13,11 +15,41 @@ function getIsActive(currentPath, itemPath) {
 }
 
 export function AppShell({ children, currentPath, navigate }) {
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+  }, [currentPath]);
+
+  useEffect(() => {
+    if (!isMobileNavOpen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileNavOpen]);
+
+  function handleNavigate(path) {
+    setIsMobileNavOpen(false);
+    navigate(path);
+  }
+
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Основная навигация">
+      <aside
+        aria-label="Основная навигация"
+        className={`sidebar ${isMobileNavOpen ? 'sidebar--open' : ''}`}
+        id="mobile-nav"
+      >
         <div className="sidebar__brand">
-          <span className="brand-mark" aria-hidden="true">HD</span>
+          <span aria-hidden="true" className="brand-mark">
+            HD
+          </span>
           <div>
             <p className="brand-title">Helpdesk 1C</p>
             <p className="brand-subtitle">Рабочее место</p>
@@ -33,7 +65,7 @@ export function AppShell({ children, currentPath, navigate }) {
               key={item.path}
               onClick={(event) => {
                 event.preventDefault();
-                navigate(item.path);
+                handleNavigate(item.path);
               }}
             >
               <span>{item.title}</span>
@@ -41,6 +73,30 @@ export function AppShell({ children, currentPath, navigate }) {
           ))}
         </nav>
       </aside>
+
+      <button
+        aria-controls="mobile-nav"
+        aria-expanded={isMobileNavOpen}
+        aria-label={isMobileNavOpen ? 'Закрыть меню' : 'Открыть меню'}
+        className="mobile-menu-button"
+        onClick={() => setIsMobileNavOpen((value) => !value)}
+        type="button"
+      >
+        <span aria-hidden="true" className="mobile-menu-button__icon">
+          <span />
+          <span />
+          <span />
+        </span>
+      </button>
+
+      {isMobileNavOpen ? (
+        <button
+          aria-label="Закрыть навигацию"
+          className="mobile-nav-backdrop"
+          onClick={() => setIsMobileNavOpen(false)}
+          type="button"
+        />
+      ) : null}
 
       <div className="workspace">
         <header className="topbar">
