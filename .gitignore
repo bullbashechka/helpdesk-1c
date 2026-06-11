@@ -29,6 +29,13 @@ backend/data/*
 # Claude Code local settings
 .claude/settings.local.json
 
+# Python bytecode (skill scripts)
+__pycache__/
+*.pyc
+
+# MS Office temp/lock files
+~$*
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

@@ -2,6 +2,7 @@ import { formatDate, formatDeadline, formatHours } from './utils/formatters.js';
 
 export const dashboardPage = {
   description: 'Сводка по заявкам, просроченным дедлайнам, статусам и категориям.',
+  icon: 'dashboard',
   kicker: 'Дашборд',
   path: '/dashboard',
   shortLabel: 'Д',
@@ -49,6 +50,7 @@ export const resourcePages = [
     emptyDescription: 'Заявки появятся здесь после создания или импорта из backend.',
     emptyTitle: 'Заявок нет',
     endpoint: '/tickets',
+    icon: 'tickets',
     kicker: 'Работа',
     path: '/tickets',
     shortLabel: 'З',
@@ -73,6 +75,7 @@ export const resourcePages = [
     emptyTitle: 'Клиентов нет',
     endpoint: '/clients',
     formFields: clientFields,
+    icon: 'clients',
     kicker: 'Справочник',
     path: '/clients',
     shortLabel: 'К',
@@ -114,6 +117,7 @@ export const resourcePages = [
     emptyTitle: 'Договоров нет',
     endpoint: '/contracts',
     formFields: [{}],
+    icon: 'contracts',
     kicker: 'Справочник',
     optionSources: {
       clients: '/clients',
@@ -140,6 +144,7 @@ export const resourcePages = [
     emptyTitle: 'Сотрудников нет',
     endpoint: '/employees',
     formFields: employeeFields,
+    icon: 'employees',
     kicker: 'Команда',
     path: '/employees',
     shortLabel: 'С',
@@ -147,6 +152,7 @@ export const resourcePages = [
   },
   {
     description: 'Периодические отчеты по заявкам и часам сотрудников с CSV-экспортом.',
+    icon: 'reports',
     kicker: 'Аналитика',
     path: '/reports',
     shortLabel: 'О',
