@@ -22,10 +22,12 @@ pnpm-debug.log*
 backend-dev.*.log
 frontend-dev.*.log
 
-# SQLite runtime sidecar files
-backend/data/*.sqlite-*
-backend/data/*.db-*
+# SQLite runtime database and sidecar files
+backend/data/*
 !backend/data/.gitkeep
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # OS/editor noise
 .DS_Store
