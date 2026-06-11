@@ -1,5 +1,8 @@
 import { createApp } from './app.js';
 import { env } from './config/env.js';
+import { initializeDatabase } from './db/init.js';
+
+initializeDatabase();
 
 const app = createApp();
 

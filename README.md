@@ -25,6 +25,7 @@ npm run dev
 npm run dev          # frontend и backend одновременно
 npm run dev:frontend # только Vite frontend
 npm run dev:backend  # только Express backend
+npm run db:init --workspace backend # создать/обновить SQLite-схему и демоданные
 npm run build        # production build frontend
 npm run start        # запуск backend без watch mode
 ```
@@ -39,6 +40,9 @@ FRONTEND_ORIGIN=http://localhost:5173
 SQLITE_DB_PATH=./data/helpdesk.sqlite
 ```
 
+SQLite-файл создаётся автоматически при старте backend. Инициализация схемы и демоданных идемпотентна: повторный запуск не дублирует фиксированные справочники и демозаписи.
+Относительный `SQLITE_DB_PATH` считается от каталога `backend/`.
+
 ## Структура
 
 ```text
@@ -52,3 +56,14 @@ frontend/
     api/
     pages/
 ```
+
+## REST API
+
+Базовый префикс API: `/api`.
+
+- `/clients` — CRUD клиентов
+- `/contracts` — CRUD договоров
+- `/employees` — CRUD сотрудников
+- `/statuses` и `/categories` — чтение фиксированных справочников
+- `/tickets` — CRUD заявок, поиск `?search=...`, фильтр просроченных `?overdue=true`
+- `/tickets/:id/work-logs` — чтение и добавление работ по заявке
