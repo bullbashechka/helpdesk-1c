@@ -2,7 +2,11 @@ import cors from 'cors';
 import express from 'express';
 
 import { env } from './config/env.js';
+import { dashboardRouter } from './routes/dashboard.routes.js';
+import { clientsRouter, contractsRouter, employeesRouter } from './routes/directories.routes.js';
 import { healthRouter } from './routes/health.routes.js';
+import { reportsRouter } from './routes/reports.routes.js';
+import { ticketsRouter } from './routes/tickets.routes.js';
 
 export function createApp() {
   const app = express();
@@ -11,6 +15,12 @@ export function createApp() {
   app.use(express.json());
 
   app.use('/api/health', healthRouter);
+  app.use('/api/dashboard', dashboardRouter);
+  app.use('/api/clients', clientsRouter);
+  app.use('/api/contracts', contractsRouter);
+  app.use('/api/employees', employeesRouter);
+  app.use('/api/reports', reportsRouter);
+  app.use('/api/tickets', ticketsRouter);
 
   app.use((req, res) => {
     res.status(404).json({
