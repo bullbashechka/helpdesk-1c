@@ -35,9 +35,16 @@ export function createApp() {
       return;
     }
 
+    if (err instanceof SyntaxError && 'body' in err) {
+      res.status(400).json({
+        message: 'Некорректный JSON в теле запроса.',
+      });
+      return;
+    }
+
     console.error(err);
     res.status(500).json({
-      error: 'Internal server error',
+      message: 'Сервер не смог обработать запрос. Попробуйте позже.',
     });
   });
 

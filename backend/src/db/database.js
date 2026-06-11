@@ -1,7 +1,9 @@
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
 
 import { env } from '../config/env.js';
+import { initializeDatabase } from './bootstrap.js';
 
 let database;
 const require = createRequire(import.meta.url);
@@ -11,6 +13,8 @@ function getDatabasePath() {
 }
 
 function createDatabase(filePath) {
+  mkdirSync(dirname(filePath), { recursive: true });
+
   try {
     const Database = require('better-sqlite3');
     return new Database(filePath);
@@ -30,7 +34,15 @@ export function getDatabase() {
   if (!database) {
     database = createDatabase(getDatabasePath());
     database.exec('PRAGMA foreign_keys = ON');
+    initializeDatabase(database);
   }
 
   return database;
+}
+
+export function closeDatabase() {
+  if (database) {
+    database.close();
+    database = null;
+  }
 }
