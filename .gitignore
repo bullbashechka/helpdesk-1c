@@ -1,4 +1,4 @@
-# Dependencies
+﻿# Dependencies
 node_modules/
 
 # Build output and caches
@@ -21,10 +21,6 @@ yarn-error.log*
 pnpm-debug.log*
 backend-dev.*.log
 frontend-dev.*.log
-
-# SQLite runtime database and sidecar files
-backend/data/*
-!backend/data/.gitkeep
 
 # Claude Code local settings
 .claude/settings.local.json
