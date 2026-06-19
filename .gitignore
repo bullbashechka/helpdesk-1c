@@ -13,6 +13,13 @@ coverage/
 !.env.example
 *.local
 
+# Runtime data
+backend/data/*.sqlite
+backend/data/*.sqlite-journal
+backend/data/*.sqlite-wal
+backend/data/*.sqlite-shm
+connector/data/
+
 # Runtime logs
 *.log
 npm-debug.log*
