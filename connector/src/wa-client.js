@@ -6,6 +6,7 @@ import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 
 import { config } from './config.js';
+import { availabilityForSize, base64Bytes, classifyMedia } from './media.js';
 
 // Persist first-auth timestamp so messages older than it are ignored on reconnect.
 function loadFirstAuthAt(sessionDir) {
@@ -47,6 +48,41 @@ function buildPayload(msg, receiverId) {
     body: msg.body ?? null,
     wa_timestamp: new Date(msg.timestamp * 1000).toISOString(),
   };
+}
+
+async function buildAttachments(msg) {
+  if (!msg.hasMedia) return [];
+
+  const classified = classifyMedia(msg);
+  if (classified.skip) return [];
+
+  if (classified.kind === 'voice') {
+    return [{ kind: 'voice', availability: 'not_stored' }];
+  }
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const media = await msg.downloadMedia();
+      if (media?.data) {
+        const bytes = base64Bytes(media.data);
+        const availability = availabilityForSize(bytes);
+        return [
+          {
+            kind: classified.kind,
+            availability,
+            original_name: media.filename ?? null,
+            mime_type: media.mimetype ?? null,
+            size_bytes: bytes,
+            ...(availability === 'stored' ? { data_base64: media.data } : {}),
+          },
+        ];
+      }
+    } catch (err) {
+      console.warn(`[wa-client] downloadMedia attempt ${attempt + 1}: ${err?.message ?? err}`);
+    }
+  }
+
+  return [{ kind: classified.kind, availability: 'failed', original_name: null, mime_type: null }];
 }
 
 export function createWaClient({ queue, statusReporter }) {
@@ -92,7 +128,7 @@ export function createWaClient({ queue, statusReporter }) {
     statusReporter.setState('disconnected');
   });
 
-  client.on('message', (msg) => {
+  client.on('message', async (msg) => {
     // Filter: skip outgoing, status broadcasts, and system messages.
     if (msg.fromMe) return;
     if (msg.from === 'status@broadcast') return;
@@ -105,6 +141,9 @@ export function createWaClient({ queue, statusReporter }) {
     }
 
     const payload = buildPayload(msg, config.receiverId);
+    payload.attachments = await buildAttachments(msg);
+    if (!payload.body && payload.attachments.length === 0) return;
+
     queue.enqueue(payload);
   });
 
