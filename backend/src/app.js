@@ -7,6 +7,7 @@ import { clientsRouter, contractsRouter, employeesRouter } from './routes/direct
 import { healthRouter } from './routes/health.routes.js';
 import { reportsRouter } from './routes/reports.routes.js';
 import { ticketsRouter } from './routes/tickets.routes.js';
+import { whatsappRouter } from './routes/whatsapp.routes.js';
 
 export function createApp() {
   const app = express();
@@ -21,6 +22,7 @@ export function createApp() {
   app.use('/api/employees', employeesRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/tickets', ticketsRouter);
+  app.use('/api/whatsapp', whatsappRouter);
 
   app.use((req, res) => {
     res.status(404).json({

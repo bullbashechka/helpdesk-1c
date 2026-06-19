@@ -77,6 +77,38 @@ const SCHEMA_SQL = `
     FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (employee_id) REFERENCES employees(id) ON UPDATE CASCADE ON DELETE RESTRICT
   );
+
+  CREATE TABLE IF NOT EXISTS wa_receivers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    phone TEXT NOT NULL UNIQUE,
+    label TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1
+  );
+
+  CREATE TABLE IF NOT EXISTS wa_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    wa_message_id TEXT NOT NULL UNIQUE,
+    receiver_id INTEGER NOT NULL,
+    sender_phone TEXT NOT NULL,
+    sender_name TEXT,
+    chat_type TEXT NOT NULL CHECK (chat_type IN ('private', 'group')),
+    group_name TEXT,
+    body TEXT,
+    wa_timestamp TEXT NOT NULL,
+    client_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (receiver_id) REFERENCES wa_receivers(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    FOREIGN KEY (client_id) REFERENCES clients(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  );
+
+  CREATE TABLE IF NOT EXISTS wa_connector_status (
+    receiver_id INTEGER PRIMARY KEY,
+    state TEXT NOT NULL CHECK (state IN ('qr_required', 'ready', 'disconnected')),
+    qr_data_url TEXT,
+    last_heartbeat_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (receiver_id) REFERENCES wa_receivers(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  );
 `;
 
 const REFERENCE_DATA_SQL = `
@@ -94,6 +126,9 @@ const REFERENCE_DATA_SQL = `
     (4, 'update', 'Обновление', 40),
     (5, 'integration', 'Интеграция', 50),
     (6, 'admin', 'Администрирование', 60);
+
+  INSERT OR IGNORE INTO wa_receivers (id, phone, label, is_active) VALUES
+    (1, 'demo', 'Рабочий номер (демо)', 1);
 `;
 
 const DEMO_DATA_SQL = `
