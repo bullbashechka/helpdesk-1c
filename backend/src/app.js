@@ -13,7 +13,7 @@ export function createApp() {
   const app = express();
 
   app.use(cors({ origin: env.frontendOrigin }));
-  app.use(express.json());
+  app.use(express.json({ limit: '35mb' }));
 
   app.use('/api/health', healthRouter);
   app.use('/api/dashboard', dashboardRouter);

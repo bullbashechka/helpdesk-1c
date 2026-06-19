@@ -1,4 +1,5 @@
 import { getDatabase } from '../db/database.js';
+import { extFromMime, storedName, writeAttachmentFile } from './wa-attachments.service.js';
 import { phonesMatch } from './phone.js';
 
 function isBlank(v) {
@@ -9,6 +10,47 @@ function findClientByPhone(senderPhone) {
   const clients = getDatabase().prepare('SELECT id, phone FROM clients WHERE phone IS NOT NULL').all();
   const match = clients.find((c) => phonesMatch(c.phone, senderPhone));
   return match ? match.id : null;
+}
+
+function saveAttachments(db, messageId, attachments) {
+  if (!Array.isArray(attachments)) return;
+
+  const insert = db.prepare(
+    `INSERT INTO wa_attachments
+      (message_id, kind, availability, original_name, mime_type, size_bytes, stored_path)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+
+  attachments.forEach((att, index) => {
+    if (!['photo', 'video', 'document', 'voice'].includes(att?.kind)) return;
+
+    let availability = ['stored', 'too_large', 'failed', 'not_stored'].includes(att.availability)
+      ? att.availability
+      : 'failed';
+    let storedPath = null;
+
+    if (availability === 'stored' && att.data_base64) {
+      const name = storedName(messageId, index, extFromMime(att.mime_type, att.original_name));
+      try {
+        writeAttachmentFile(name, att.data_base64);
+        storedPath = name;
+      } catch {
+        availability = 'failed';
+      }
+    } else if (availability === 'stored') {
+      availability = 'failed';
+    }
+
+    insert.run(
+      messageId,
+      att.kind,
+      availability,
+      att.original_name ? String(att.original_name) : null,
+      att.mime_type ? String(att.mime_type) : null,
+      Number.isFinite(att.size_bytes) ? att.size_bytes : null,
+      storedPath,
+    );
+  });
 }
 
 export function ingestMessage(payload) {
@@ -51,6 +93,8 @@ export function ingestMessage(payload) {
   const id = deduplicated
     ? db.prepare('SELECT id FROM wa_messages WHERE wa_message_id = ?').get(String(wa_message_id))?.id ?? null
     : Number(result.lastInsertRowid);
+
+  if (!deduplicated && id) saveAttachments(db, id, payload.attachments);
 
   return { deduplicated, id };
 }

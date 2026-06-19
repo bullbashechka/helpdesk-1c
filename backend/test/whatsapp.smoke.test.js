@@ -8,6 +8,7 @@ const testDataDir = mkdtempSync(join(tmpdir(), 'helpdesk-wa-'));
 process.env.SQLITE_DB_PATH = join(testDataDir, 'helpdesk.sqlite');
 process.env.FRONTEND_ORIGIN = 'http://localhost:5173';
 process.env.WHATSAPP_CONNECTOR_TOKEN = 'test-token';
+process.env.WA_ATTACHMENTS_DIR = join(testDataDir, 'wa-attachments');
 
 const { createApp } = await import('../src/app.js');
 const { closeDatabase } = await import('../src/db/database.js');
@@ -41,6 +42,9 @@ const baseMessage = {
   body: 'Привет, вопрос по 1С',
   wa_timestamp: new Date().toISOString(),
 };
+
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 describe('WhatsApp API smoke', () => {
   before(async () => {
@@ -112,6 +116,79 @@ describe('WhatsApp API smoke', () => {
       headers: VALID_TOKEN,
     });
     assert.equal(response.status, 400);
+  });
+
+  test('ingest с фото сохраняет вложение → stored', async () => {
+    const { getDatabase } = await import('../src/db/database.js');
+    const { payload } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_ATT_PHOTO_1',
+        attachments: [
+          {
+            kind: 'photo',
+            availability: 'stored',
+            original_name: 'shot.png',
+            mime_type: 'image/png',
+            data_base64: PNG_BASE64,
+          },
+        ],
+      }),
+    });
+    const rows = getDatabase().prepare('SELECT * FROM wa_attachments WHERE message_id = ?').all(payload.id);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].availability, 'stored');
+    assert.ok(rows[0].stored_path);
+  });
+
+  test('ingest too_large не пишет файл', async () => {
+    const { getDatabase } = await import('../src/db/database.js');
+    const { payload } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_ATT_BIG_1',
+        attachments: [{ kind: 'video', availability: 'too_large', original_name: 'big.mp4', mime_type: 'video/mp4' }],
+      }),
+    });
+    const row = getDatabase().prepare('SELECT * FROM wa_attachments WHERE message_id = ?').get(payload.id);
+    assert.equal(row.availability, 'too_large');
+    assert.equal(row.stored_path, null);
+  });
+
+  test('voice → not_stored без файла', async () => {
+    const { getDatabase } = await import('../src/db/database.js');
+    const { payload } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_ATT_VOICE_1',
+        body: null,
+        attachments: [{ kind: 'voice', availability: 'not_stored' }],
+      }),
+    });
+    const row = getDatabase().prepare('SELECT * FROM wa_attachments WHERE message_id = ?').get(payload.id);
+    assert.equal(row.kind, 'voice');
+    assert.equal(row.availability, 'not_stored');
+  });
+
+  test('дедуп не дублирует вложения', async () => {
+    const { getDatabase } = await import('../src/db/database.js');
+    const msg = {
+      ...baseMessage,
+      wa_message_id: 'false_ATT_DUP_1',
+      attachments: [
+        { kind: 'photo', availability: 'stored', original_name: 'a.png', mime_type: 'image/png', data_base64: PNG_BASE64 },
+      ],
+    };
+    const first = await request('/whatsapp/ingest', { method: 'POST', headers: VALID_TOKEN, body: JSON.stringify(msg) });
+    await request('/whatsapp/ingest', { method: 'POST', headers: VALID_TOKEN, body: JSON.stringify(msg) });
+    const rows = getDatabase().prepare('SELECT * FROM wa_attachments WHERE message_id = ?').all(first.payload.id);
+    assert.equal(rows.length, 1);
   });
 
   test('POST /whatsapp/status обновляет состояние → 204', async () => {
