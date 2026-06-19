@@ -146,3 +146,20 @@ export function getAttachmentForDownload(id) {
     original_name: row.original_name || `attachment-${id}`,
   };
 }
+
+export function getMessageWithAttachments(id) {
+  const db = getDatabase();
+  const message = db.prepare('SELECT * FROM wa_messages WHERE id = ?').get(Number(id));
+  if (!message) return null;
+
+  const attachments = db
+    .prepare(
+      `SELECT id, kind, availability, original_name, mime_type, size_bytes
+       FROM wa_attachments
+       WHERE message_id = ?
+       ORDER BY id`,
+    )
+    .all(Number(id));
+
+  return { ...message, attachments };
+}

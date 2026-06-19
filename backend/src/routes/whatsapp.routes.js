@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import {
   getAttachmentForDownload,
   getConnectorStatus,
+  getMessageWithAttachments,
   ingestMessage,
   upsertConnectorStatus,
 } from '../services/whatsapp.service.js';
@@ -48,6 +49,16 @@ whatsappRouter.get('/attachments/:id', (req, res) => {
   res.setHeader('Content-Type', file.mime_type);
   res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(file.original_name)}"`);
   res.sendFile(file.absPath);
+});
+
+whatsappRouter.get('/messages/:id', (req, res) => {
+  const message = getMessageWithAttachments(req.params.id);
+  if (!message) {
+    res.status(404).json({ message: 'Сообщение не найдено.' });
+    return;
+  }
+
+  res.json(message);
 });
 
 whatsappRouter.get('/status', (req, res) => {

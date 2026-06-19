@@ -216,6 +216,25 @@ describe('WhatsApp API smoke', () => {
     assert.equal(res.status, 404);
   });
 
+  test('GET messages/:id возвращает сообщение с вложениями', async () => {
+    const { payload } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_MSG_READ_1',
+        attachments: [
+          { kind: 'photo', availability: 'stored', original_name: 'm.png', mime_type: 'image/png', data_base64: PNG_BASE64 },
+        ],
+      }),
+    });
+    const { response, payload: msg } = await request(`/whatsapp/messages/${payload.id}`);
+    assert.equal(response.status, 200);
+    assert.equal(msg.id, payload.id);
+    assert.equal(msg.attachments.length, 1);
+    assert.equal(msg.attachments[0].kind, 'photo');
+  });
+
   test('POST /whatsapp/status обновляет состояние → 204', async () => {
     const { response } = await request('/whatsapp/status', {
       method: 'POST',
