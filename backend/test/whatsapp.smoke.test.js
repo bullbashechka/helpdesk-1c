@@ -59,6 +59,14 @@ describe('WhatsApp API smoke', () => {
     rmSync(testDataDir, { force: true, recursive: true });
   });
 
+  test('таблица wa_attachments создана', async () => {
+    const { getDatabase } = await import('../src/db/database.js');
+    const row = getDatabase()
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='wa_attachments'")
+      .get();
+    assert.ok(row, 'ожидалась таблица wa_attachments');
+  });
+
   test('POST /whatsapp/ingest без токена → 401', async () => {
     const { response } = await request('/whatsapp/ingest', {
       method: 'POST',

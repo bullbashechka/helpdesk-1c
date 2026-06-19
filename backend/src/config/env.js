@@ -7,4 +7,5 @@ export const env = {
   frontendOrigin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
   sqliteDbPath: process.env.SQLITE_DB_PATH || './data/helpdesk.sqlite',
   whatsappConnectorToken: process.env.WHATSAPP_CONNECTOR_TOKEN || 'dev-connector-token',
+  waAttachmentsDir: process.env.WA_ATTACHMENTS_DIR || './data/wa-attachments',
 };

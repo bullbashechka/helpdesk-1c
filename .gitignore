@@ -18,6 +18,7 @@ backend/data/*.sqlite
 backend/data/*.sqlite-journal
 backend/data/*.sqlite-wal
 backend/data/*.sqlite-shm
+backend/data/wa-attachments/
 connector/data/
 
 # Runtime logs

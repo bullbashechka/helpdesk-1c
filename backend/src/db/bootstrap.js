@@ -101,6 +101,19 @@ const SCHEMA_SQL = `
     FOREIGN KEY (client_id) REFERENCES clients(id) ON UPDATE CASCADE ON DELETE RESTRICT
   );
 
+  CREATE TABLE IF NOT EXISTS wa_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('photo','video','document','voice')),
+    availability TEXT NOT NULL CHECK (availability IN ('stored','too_large','failed','not_stored')),
+    original_name TEXT,
+    mime_type TEXT,
+    size_bytes INTEGER,
+    stored_path TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (message_id) REFERENCES wa_messages(id) ON UPDATE CASCADE ON DELETE RESTRICT
+  );
+
   CREATE TABLE IF NOT EXISTS wa_connector_status (
     receiver_id INTEGER PRIMARY KEY,
     state TEXT NOT NULL CHECK (state IN ('qr_required', 'ready', 'disconnected')),
