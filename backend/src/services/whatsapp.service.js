@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs';
+
 import { getDatabase } from '../db/database.js';
-import { extFromMime, storedName, writeAttachmentFile } from './wa-attachments.service.js';
+import { extFromMime, resolveSafePath, storedName, writeAttachmentFile } from './wa-attachments.service.js';
 import { phonesMatch } from './phone.js';
 
 function isBlank(v) {
@@ -127,4 +129,20 @@ export function getConnectorStatus(receiverId = 1) {
   return getDatabase()
     .prepare('SELECT * FROM wa_connector_status WHERE receiver_id = ?')
     .get(Number(receiverId)) ?? null;
+}
+
+export function getAttachmentForDownload(id) {
+  const row = getDatabase()
+    .prepare("SELECT * FROM wa_attachments WHERE id = ? AND availability = 'stored'")
+    .get(Number(id));
+  if (!row || !row.stored_path) return null;
+
+  const absPath = resolveSafePath(row.stored_path);
+  if (!absPath || !existsSync(absPath)) return null;
+
+  return {
+    absPath,
+    mime_type: row.mime_type || 'application/octet-stream',
+    original_name: row.original_name || `attachment-${id}`,
+  };
 }

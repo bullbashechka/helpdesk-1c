@@ -1,7 +1,12 @@
 import { Router } from 'express';
 
 import { env } from '../config/env.js';
-import { getConnectorStatus, ingestMessage, upsertConnectorStatus } from '../services/whatsapp.service.js';
+import {
+  getAttachmentForDownload,
+  getConnectorStatus,
+  ingestMessage,
+  upsertConnectorStatus,
+} from '../services/whatsapp.service.js';
 
 export const whatsappRouter = Router();
 
@@ -30,6 +35,19 @@ whatsappRouter.post('/status', requireConnectorToken, (req, res) => {
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
+});
+
+whatsappRouter.get('/attachments/:id', (req, res) => {
+  const file = getAttachmentForDownload(req.params.id);
+  if (!file) {
+    res.status(404).json({ message: 'Вложение не найдено.' });
+    return;
+  }
+
+  const disposition = req.query.download ? 'attachment' : 'inline';
+  res.setHeader('Content-Type', file.mime_type);
+  res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(file.original_name)}"`);
+  res.sendFile(file.absPath);
 });
 
 whatsappRouter.get('/status', (req, res) => {

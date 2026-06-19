@@ -191,6 +191,31 @@ describe('WhatsApp API smoke', () => {
     assert.equal(rows.length, 1);
   });
 
+  test('GET attachments/:id отдаёт файл с верным типом', async () => {
+    const { getDatabase } = await import('../src/db/database.js');
+    const { payload } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_ATT_DL_1',
+        attachments: [
+          { kind: 'photo', availability: 'stored', original_name: 'd.png', mime_type: 'image/png', data_base64: PNG_BASE64 },
+        ],
+      }),
+    });
+    const att = getDatabase().prepare('SELECT id FROM wa_attachments WHERE message_id = ?').get(payload.id);
+    const res = await fetch(`${baseUrl}/whatsapp/attachments/${att.id}`);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/png');
+    assert.ok((await res.arrayBuffer()).byteLength > 0);
+  });
+
+  test('GET attachments/:id для несуществующего → 404', async () => {
+    const res = await fetch(`${baseUrl}/whatsapp/attachments/999999`);
+    assert.equal(res.status, 404);
+  });
+
   test('POST /whatsapp/status обновляет состояние → 204', async () => {
     const { response } = await request('/whatsapp/status', {
       method: 'POST',
