@@ -59,19 +59,76 @@ Helpdesk MVP for tracking 1C support tickets. npm workspaces monorepo: `backend`
 
 Requires **Node 24+** (better-sqlite3 native module, with `node:sqlite` as fallback).
 
+## Быстрый старт
+
+### 1. Первый запуск (один раз)
+
+Создать `.env` в корне проекта (на основе `.env.example`):
+
+```bash
+cp .env.example .env
+```
+
+Создать `.env` для коннектора:
+
+```bash
+cp connector/.env.example connector/.env
+# Указать свой номер WhatsApp в RECEIVER_PHONE, например: RECEIVER_PHONE=77071234567
+```
+
+Установить зависимости (если не установлены):
+
+```bash
+npm install
+```
+
+Пересоздать базу с демо-данными:
+
+```bash
+npm run seed:demo
+```
+
+### 2. Запуск (каждый раз)
+
+Нужно **два терминала**:
+
+**Терминал 1 — основное приложение (backend + frontend):**
+```bash
+npm run dev
+```
+Открыть в браузере: http://localhost:5173
+
+**Терминал 2 — WhatsApp коннектор (опционально, только когда нужна реальная интеграция):**
+```bash
+npm run dev:connector
+```
+При первом запуске коннектор покажет QR-код в баннере раздела «Вопросы с WhatsApp» — отсканируйте его приложением WhatsApp (Связанные устройства → Привязать устройство). После успешного сканирования сессия сохраняется, повторное сканирование не нужно.
+
+> **Без коннектора** приложение работает в полном объёме, но раздел WhatsApp будет показывать демо-данные без получения новых сообщений.
+
+### 3. Сброс данных
+
+```bash
+npm run seed:demo   # удаляет helpdesk.sqlite и создаёт заново с демо-данными
+```
+
+⚠️ При изменении схемы БД (`bootstrap.js`) обязательно делать `npm run seed:demo` — миграций нет.
+
+---
+
 ## Commands
 
 ```bash
-npm run dev            # backend (port 4000) + frontend (port 5173) together
-npm run dev:backend    # backend only, node --watch
-npm run dev:frontend   # frontend only
-npm run dev:connector  # WhatsApp connector only, node --watch
-npm test               # backend smoke tests + frontend util tests + connector unit tests
-npm run seed:demo      # delete backend/data/helpdesk.sqlite and recreate with demo data
-npm run build          # production build of frontend
+npm run dev            # backend (port 4000) + frontend (port 5173) вместе
+npm run dev:backend    # только backend, с --watch
+npm run dev:frontend   # только frontend
+npm run dev:connector  # только WhatsApp коннектор, с --watch
+npm test               # все тесты (backend + frontend utils + connector)
+npm run seed:demo      # пересоздать БД с демо-данными
+npm run build          # production-сборка frontend
 ```
 
-Single test file (uses node's built-in test runner, no Jest/Vitest):
+Отдельный запуск тест-файла (node built-in runner, без Jest/Vitest):
 
 ```bash
 cd backend && node --test test/api.smoke.test.js
@@ -80,7 +137,7 @@ cd frontend && node --test src/utils/csv.test.js
 cd connector && node --test test/*.test.js
 ```
 
-There is no linter configured.
+Линтера нет.
 
 ## Architecture
 

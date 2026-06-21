@@ -32,7 +32,48 @@ function bodyPreview(body, attachmentKinds) {
   return '—';
 }
 
+function QrModal({ qrDataUrl, onClose }) {
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="QR-код WhatsApp"
+        style={{ maxWidth: 340, textAlign: 'center' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal__header">
+          <h2>Подключить WhatsApp</h2>
+          <button aria-label="Закрыть" className="icon-button" onClick={onClose} type="button">×</button>
+        </div>
+        <p style={{ margin: '0 0 16px', fontSize: '0.88rem', color: '#6b7280' }}>
+          Откройте WhatsApp на телефоне → Связанные устройства → Привязать устройство → отсканируйте код.
+        </p>
+        <img
+          src={qrDataUrl}
+          alt="QR-код для подключения WhatsApp"
+          style={{ width: '100%', maxWidth: 280, height: 'auto', borderRadius: 8, border: '1px solid #e5e7eb' }}
+        />
+        <p style={{ margin: '12px 0 0', fontSize: '0.8rem', color: '#9ca3af' }}>
+          Код обновляется автоматически. Закройте и откройте снова если истёк.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ConnectorBanner({ status }) {
+  const [showQr, setShowQr] = useState(false);
+
   if (!status) return null;
 
   const twoMinutesAgo = Date.now() - 2 * 60 * 1000;
@@ -41,16 +82,31 @@ function ConnectorBanner({ status }) {
 
   if (status.state === 'ready' && heartbeatOk) return null;
 
-  const isQr = status.state === 'qr_required';
+  const isQr = status.state === 'qr_required' && status.qr_data_url;
   const msg = isQr
     ? 'Коннектор ожидает сканирования QR-кода — новые сообщения не поступают.'
     : 'Связь с WhatsApp потеряна — новые сообщения не поступают.';
 
   return (
-    <div className="connector-banner connector-banner--warn" role="alert">
-      <span className="connector-banner__icon" aria-hidden="true">⚠</span>
-      <span>{msg}</span>
-    </div>
+    <>
+      <div className="connector-banner connector-banner--warn" role="alert">
+        <span className="connector-banner__icon" aria-hidden="true">⚠</span>
+        <span style={{ flex: 1 }}>{msg}</span>
+        {isQr ? (
+          <button
+            type="button"
+            className="button"
+            style={{ marginLeft: 12, flexShrink: 0, padding: '4px 12px', fontSize: '0.82rem' }}
+            onClick={() => setShowQr(true)}
+          >
+            Показать QR
+          </button>
+        ) : null}
+      </div>
+      {showQr && isQr ? (
+        <QrModal qrDataUrl={status.qr_data_url} onClose={() => setShowQr(false)} />
+      ) : null}
+    </>
   );
 }
 
