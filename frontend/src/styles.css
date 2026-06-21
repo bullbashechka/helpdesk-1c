@@ -555,6 +555,228 @@ h2 {
   margin-top: 20px;
 }
 
+/* Section top-level tabs (Инбокс / Задачи) */
+.wa-section-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.wa-section-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.wa-section-tab:hover {
+  color: #4338ca;
+}
+
+.wa-section-tab--active {
+  border-bottom-color: #4338ca;
+  color: #4338ca;
+}
+
+/* Message drawer (side panel) */
+.wa-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.wa-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  width: min(480px, 100vw);
+  background: #fff;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.wa-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.wa-drawer__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-drawer__close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  transition: background 0.1s;
+}
+
+.wa-drawer__close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.wa-drawer__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wa-drawer__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wa-drawer__sender {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #111827;
+}
+
+.wa-drawer__client {
+  font-size: 0.85rem;
+  color: #4338ca;
+  font-weight: 600;
+}
+
+.wa-drawer__date {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.wa-drawer__body-text {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+  color: #374151;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 60px;
+}
+
+.wa-drawer__empty-body {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.wa-drawer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.wa-drawer__divider {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 0;
+}
+
+/* Inline task form inside drawer */
+.wa-task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1.5px solid #e0e7ff;
+  border-radius: 10px;
+  background: #f8f9ff;
+}
+
+.wa-task-form__title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #3730a3;
+  margin: 0;
+}
+
+.wa-task-form__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Task status badges */
+.status-badge--wa-task-new {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-badge--wa-task-in_progress {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.status-badge--wa-task-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-badge--wa-task-closed {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Priority badges */
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.priority-badge--low { background: #f1f5f9; color: #475569; }
+.priority-badge--normal { background: #e0f2fe; color: #0369a1; }
+.priority-badge--high { background: #fef3c7; color: #b45309; }
+.priority-badge--urgent { background: #fee2e2; color: #dc2626; }
+
 .clickable-row {
   cursor: pointer;
 }

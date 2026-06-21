@@ -245,3 +245,189 @@ export function getMessagesSummary() {
   }
   return { counts };
 }
+
+export function archiveMessage(id) {
+  const db = getDatabase();
+  const msg = db.prepare('SELECT id, processing_status FROM wa_messages WHERE id = ?').get(Number(id));
+  if (!msg) throw Object.assign(new Error('Сообщение не найдено.'), { notFound: true });
+  if (msg.processing_status !== 'new') {
+    throw new Error('Отправить в архив можно только сообщение со статусом «Новое».');
+  }
+  db.prepare("UPDATE wa_messages SET processing_status = 'archived' WHERE id = ?").run(Number(id));
+}
+
+export function unarchiveMessage(id) {
+  const db = getDatabase();
+  const msg = db.prepare('SELECT id, processing_status FROM wa_messages WHERE id = ?').get(Number(id));
+  if (!msg) throw Object.assign(new Error('Сообщение не найдено.'), { notFound: true });
+  if (msg.processing_status !== 'archived') {
+    throw new Error('Вернуть в инбокс можно только сообщение со статусом «Архив».');
+  }
+  db.prepare("UPDATE wa_messages SET processing_status = 'new' WHERE id = ?").run(Number(id));
+}
+
+const TASK_PRIORITY_VALUES = new Set(['low', 'normal', 'high', 'urgent']);
+const TASK_STATUS_VALUES = new Set(['new', 'in_progress', 'done', 'closed']);
+const VALID_TASK_STATUSES = new Set(['new', 'in_progress', 'done', 'closed']);
+
+function mapTask(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    messageId: row.message_id,
+    clientId: row.client_id,
+    clientName: row.client_name ?? null,
+    subject: row.subject,
+    description: row.description ?? null,
+    priority: row.priority,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function createTaskFromMessage(input) {
+  const db = getDatabase();
+
+  // Accept both snake_case (API) and camelCase
+  const msgId = input.message_id ?? input.messageId;
+  const { subject, priority, description } = input;
+
+  const subjectTrimmed = String(subject ?? '').trim();
+  if (!subjectTrimmed) throw new Error('Тема задачи обязательна.');
+  if (!TASK_PRIORITY_VALUES.has(priority)) throw new Error('Указан некорректный приоритет задачи.');
+
+  const msg = db.prepare('SELECT id, processing_status, client_id FROM wa_messages WHERE id = ?').get(Number(msgId));
+  if (!msg) throw Object.assign(new Error('Сообщение не найдено.'), { notFound: true });
+  if (msg.processing_status === 'task_created') {
+    throw Object.assign(new Error('Из этого сообщения уже создана задача.'), { conflict: true });
+  }
+  if (msg.processing_status !== 'new') {
+    throw new Error('Создать задачу можно только из сообщения со статусом «Новое».');
+  }
+
+  const descTrimmed = description != null ? String(description).trim() || null : null;
+
+  const newId = db.transaction(() => {
+    const result = db
+      .prepare(
+        `INSERT INTO wa_tasks (message_id, client_id, subject, description, priority)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(Number(msg.id), msg.client_id, subjectTrimmed, descTrimmed, priority);
+    db.prepare("UPDATE wa_messages SET processing_status = 'task_created' WHERE id = ?").run(Number(msg.id));
+    return Number(result.lastInsertRowid);
+  })();
+
+  return getTaskById(newId);
+}
+
+export function getTaskById(id) {
+  const db = getDatabase();
+  const row = db
+    .prepare(
+      `SELECT t.*, c.name AS client_name
+       FROM wa_tasks t
+       LEFT JOIN clients c ON c.id = t.client_id
+       WHERE t.id = ?`,
+    )
+    .get(Number(id));
+  if (!row) return null;
+
+  const task = mapTask(row);
+
+  const message = db.prepare('SELECT * FROM wa_messages WHERE id = ?').get(row.message_id);
+  const attachments = db
+    .prepare(
+      `SELECT id, kind, availability, original_name, mime_type, size_bytes
+       FROM wa_attachments WHERE message_id = ? ORDER BY id`,
+    )
+    .all(row.message_id);
+
+  task.message = message ? { ...message, attachments } : null;
+  return task;
+}
+
+export function updateTask(id, { subject, priority, description, status }) {
+  const db = getDatabase();
+
+  const subjectTrimmed = String(subject ?? '').trim();
+  if (!subjectTrimmed) throw new Error('Тема задачи обязательна.');
+  if (!TASK_PRIORITY_VALUES.has(priority)) throw new Error('Указан некорректный приоритет задачи.');
+  if (!TASK_STATUS_VALUES.has(status)) throw new Error('Указан некорректный статус задачи.');
+
+  const existing = db.prepare('SELECT id FROM wa_tasks WHERE id = ?').get(Number(id));
+  if (!existing) return null;
+
+  const descTrimmed = description != null ? String(description).trim() || null : null;
+
+  db.prepare(
+    `UPDATE wa_tasks
+     SET subject = ?, description = ?, priority = ?, status = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  ).run(subjectTrimmed, descTrimmed, priority, status, Number(id));
+
+  return getTaskById(Number(id));
+}
+
+export function listTasks({ status, limit = 50, offset = 0 } = {}) {
+  const db = getDatabase();
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const safeOffset = Math.max(Number(offset) || 0, 0);
+  const filterStatus = VALID_TASK_STATUSES.has(status) ? status : null;
+
+  const where = filterStatus ? `WHERE t.status = '${filterStatus}'` : '';
+
+  const rows = db
+    .prepare(
+      `SELECT
+         t.id, t.message_id, t.client_id, t.subject, t.description,
+         t.priority, t.status, t.created_at, t.updated_at,
+         c.name AS client_name,
+         m.sender_name, m.sender_phone, m.wa_timestamp
+       FROM wa_tasks t
+       LEFT JOIN clients c ON c.id = t.client_id
+       LEFT JOIN wa_messages m ON m.id = t.message_id
+       ${where}
+       ORDER BY t.created_at DESC, t.id DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(safeLimit, safeOffset);
+
+  const total = db.prepare(`SELECT COUNT(*) AS cnt FROM wa_tasks t ${where}`).get()?.cnt ?? 0;
+
+  return {
+    items: rows.map((r) => ({
+      id: r.id,
+      messageId: r.message_id,
+      clientId: r.client_id,
+      clientName: r.client_name ?? null,
+      subject: r.subject,
+      description: r.description ?? null,
+      priority: r.priority,
+      status: r.status,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      senderName: r.sender_name ?? null,
+      senderPhone: r.sender_phone ?? null,
+      waTimestamp: r.wa_timestamp ?? null,
+    })),
+    total,
+  };
+}
+
+export function getTasksSummary() {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT status, COUNT(*) AS cnt FROM wa_tasks GROUP BY status`,
+    )
+    .all();
+
+  const counts = { new: 0, in_progress: 0, done: 0, closed: 0, all: 0 };
+  for (const row of rows) {
+    if (VALID_TASK_STATUSES.has(row.status)) counts[row.status] = row.cnt;
+    counts.all += row.cnt;
+  }
+  return { counts };
+}

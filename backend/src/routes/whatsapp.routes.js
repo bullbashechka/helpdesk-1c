@@ -2,12 +2,19 @@ import { Router } from 'express';
 
 import { env } from '../config/env.js';
 import {
+  archiveMessage,
+  createTaskFromMessage,
   getAttachmentForDownload,
   getConnectorStatus,
   getMessagesSummary,
   getMessageWithAttachments,
+  getTaskById,
+  getTasksSummary,
   ingestMessage,
   listMessages,
+  listTasks,
+  unarchiveMessage,
+  updateTask,
   upsertConnectorStatus,
 } from '../services/whatsapp.service.js';
 
@@ -80,4 +87,85 @@ whatsappRouter.get('/status', (req, res) => {
     return;
   }
   res.json(status);
+});
+
+// --- Операторские действия над сообщениями ---
+
+function handleMessageActionError(res, err) {
+  if (err.notFound) return res.status(404).json({ message: err.message });
+  return res.status(400).json({ message: err.message });
+}
+
+whatsappRouter.post('/messages/:id/archive', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ message: 'Некорректный идентификатор сообщения.' });
+  }
+  try {
+    archiveMessage(id);
+    return res.status(204).end();
+  } catch (err) {
+    return handleMessageActionError(res, err);
+  }
+});
+
+whatsappRouter.post('/messages/:id/unarchive', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ message: 'Некорректный идентификатор сообщения.' });
+  }
+  try {
+    unarchiveMessage(id);
+    return res.status(204).end();
+  } catch (err) {
+    return handleMessageActionError(res, err);
+  }
+});
+
+// --- Задачи WhatsApp ---
+
+whatsappRouter.get('/tasks/summary', (req, res) => {
+  res.json(getTasksSummary());
+});
+
+whatsappRouter.get('/tasks', (req, res) => {
+  const { status, limit, offset } = req.query;
+  res.json(listTasks({ status, limit, offset }));
+});
+
+whatsappRouter.post('/tasks', (req, res) => {
+  try {
+    const task = createTaskFromMessage(req.body ?? {});
+    return res.status(201).json(task);
+  } catch (err) {
+    if (err.notFound) return res.status(404).json({ message: err.message });
+    if (err.conflict || (err.message ?? '').toLowerCase().includes('unique constraint')) {
+      return res.status(409).json({ message: err.message || 'Из этого сообщения уже создана задача.' });
+    }
+    return res.status(400).json({ message: err.message ?? 'Не удалось создать задачу.' });
+  }
+});
+
+whatsappRouter.get('/tasks/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ message: 'Некорректный идентификатор задачи.' });
+  }
+  const task = getTaskById(id);
+  if (!task) return res.status(404).json({ message: 'Задача не найдена.' });
+  return res.json(task);
+});
+
+whatsappRouter.put('/tasks/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ message: 'Некорректный идентификатор задачи.' });
+  }
+  try {
+    const task = updateTask(id, req.body ?? {});
+    if (!task) return res.status(404).json({ message: 'Задача не найдена.' });
+    return res.json(task);
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
+  }
 });

@@ -30,6 +30,23 @@ async function request(path, options = {}) {
   return { payload, response };
 }
 
+// Модульный before/after: запускают сервер один раз для всех describe-блоков
+before(async () => {
+  const app = createApp();
+  server = await new Promise((resolve) => {
+    const listener = app.listen(0, () => resolve(listener));
+  });
+  baseUrl = `http://127.0.0.1:${server.address().port}/api`;
+});
+
+after(async () => {
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+  closeDatabase();
+  rmSync(testDataDir, { force: true, recursive: true });
+});
+
 const VALID_TOKEN = { 'X-Connector-Token': 'test-token' };
 const WRONG_TOKEN = { 'X-Connector-Token': 'wrong' };
 
@@ -47,22 +64,6 @@ const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 describe('WhatsApp API smoke', () => {
-  before(async () => {
-    const app = createApp();
-    server = await new Promise((resolve) => {
-      const listener = app.listen(0, () => resolve(listener));
-    });
-    baseUrl = `http://127.0.0.1:${server.address().port}/api`;
-  });
-
-  after(async () => {
-    await new Promise((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
-    closeDatabase();
-    rmSync(testDataDir, { force: true, recursive: true });
-  });
-
   test('таблица wa_attachments создана', async () => {
     const { getDatabase } = await import('../src/db/database.js');
     const row = getDatabase()
@@ -359,5 +360,225 @@ describe('WhatsApp API smoke', () => {
     assert.ok(found.attachmentsCount >= 1);
     assert.ok(Array.isArray(found.attachmentKinds));
     assert.ok(found.attachmentKinds.includes('photo'));
+  });
+});
+
+describe('WhatsApp задачи и архив', () => {
+  let ingestedMsgId;
+
+  before(async () => {
+    // Создаём тестовое сообщение через ingest
+    const { payload } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_TASK_TEST_1',
+        body: 'Не работает 1С после обновления',
+      }),
+    });
+    ingestedMsgId = payload.id;
+  });
+
+  // --- Архив ---
+
+  test('POST /messages/:id/archive (new) → 204', async () => {
+    // Используем другое сообщение, чтобы не конфликтовать с тестами задач
+    const { payload: msg } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({ ...baseMessage, wa_message_id: 'false_ARCHIVE_TEST_1' }),
+    });
+    const { response } = await request(`/whatsapp/messages/${msg.id}/archive`, { method: 'POST' });
+    assert.equal(response.status, 204);
+  });
+
+  test('GET /messages/:id после archive показывает archived', async () => {
+    const { payload: msg } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({ ...baseMessage, wa_message_id: 'false_ARCHIVE_TEST_2' }),
+    });
+    await request(`/whatsapp/messages/${msg.id}/archive`, { method: 'POST' });
+    const { payload: detail } = await request(`/whatsapp/messages/${msg.id}`);
+    assert.equal(detail.processing_status, 'archived');
+  });
+
+  test('POST /messages/:id/unarchive → 204 и статус снова new', async () => {
+    const { payload: msg } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({ ...baseMessage, wa_message_id: 'false_ARCHIVE_TEST_3' }),
+    });
+    await request(`/whatsapp/messages/${msg.id}/archive`, { method: 'POST' });
+    const { response } = await request(`/whatsapp/messages/${msg.id}/unarchive`, { method: 'POST' });
+    assert.equal(response.status, 204);
+    const { payload: detail } = await request(`/whatsapp/messages/${msg.id}`);
+    assert.equal(detail.processing_status, 'new');
+  });
+
+  test('archive несуществующего сообщения → 404', async () => {
+    const { response } = await request('/whatsapp/messages/999999/archive', { method: 'POST' });
+    assert.equal(response.status, 404);
+  });
+
+  test('повторный archive (уже archived) → 400', async () => {
+    const { payload: msg } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({ ...baseMessage, wa_message_id: 'false_ARCHIVE_TEST_4' }),
+    });
+    await request(`/whatsapp/messages/${msg.id}/archive`, { method: 'POST' });
+    const { response } = await request(`/whatsapp/messages/${msg.id}/archive`, { method: 'POST' });
+    assert.equal(response.status, 400);
+  });
+
+  // --- Задачи ---
+
+  test('POST /tasks создаёт задачу из нового сообщения → 201', async () => {
+    const { response, payload } = await request('/whatsapp/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ message_id: ingestedMsgId, subject: 'Тестовая задача', priority: 'normal' }),
+    });
+    assert.equal(response.status, 201);
+    assert.ok(typeof payload.id === 'number');
+    assert.equal(payload.status, 'new');
+    assert.equal(payload.priority, 'normal');
+    assert.equal(payload.subject, 'Тестовая задача');
+  });
+
+  test('статус исходного сообщения стал task_created', async () => {
+    const { payload: detail } = await request(`/whatsapp/messages/${ingestedMsgId}`);
+    assert.equal(detail.processing_status, 'task_created');
+  });
+
+  test('POST /tasks из того же сообщения → 409 (дубль)', async () => {
+    const { response } = await request('/whatsapp/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ message_id: ingestedMsgId, subject: 'Дубль', priority: 'low' }),
+    });
+    assert.equal(response.status, 409);
+  });
+
+  test('POST /tasks без subject → 400', async () => {
+    const { payload: newMsg } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({ ...baseMessage, wa_message_id: 'false_TASK_NO_SUBJ' }),
+    });
+    const { response } = await request('/whatsapp/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ message_id: newMsg.id, subject: '', priority: 'normal' }),
+    });
+    assert.equal(response.status, 400);
+  });
+
+  test('POST /tasks с неверным priority → 400', async () => {
+    const { payload: newMsg } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({ ...baseMessage, wa_message_id: 'false_TASK_BAD_PRIO' }),
+    });
+    const { response } = await request('/whatsapp/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ message_id: newMsg.id, subject: 'Тест', priority: 'critical' }),
+    });
+    assert.equal(response.status, 400);
+  });
+
+  test('POST /tasks из archived сообщения → 400', async () => {
+    const { payload: msg } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({ ...baseMessage, wa_message_id: 'false_TASK_FROM_ARCH' }),
+    });
+    await request(`/whatsapp/messages/${msg.id}/archive`, { method: 'POST' });
+    const { response } = await request('/whatsapp/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ message_id: msg.id, subject: 'Из архива', priority: 'normal' }),
+    });
+    assert.equal(response.status, 400);
+  });
+
+  test('GET /tasks возвращает items и total', async () => {
+    const { response, payload } = await request('/whatsapp/tasks');
+    assert.equal(response.status, 200);
+    assert.ok(Array.isArray(payload.items));
+    assert.ok(typeof payload.total === 'number');
+    assert.ok(payload.total >= 1);
+  });
+
+  test('GET /tasks содержит созданную задачу', async () => {
+    const { payload } = await request('/whatsapp/tasks');
+    const found = payload.items.find((t) => t.messageId === ingestedMsgId);
+    assert.ok(found, 'задача должна быть в списке');
+    assert.equal(found.subject, 'Тестовая задача');
+  });
+
+  test('GET /tasks/summary возвращает counts', async () => {
+    const { response, payload } = await request('/whatsapp/tasks/summary');
+    assert.equal(response.status, 200);
+    assert.ok(typeof payload.counts === 'object');
+    assert.ok(typeof payload.counts.new === 'number');
+    assert.ok(payload.counts.new >= 1);
+    assert.ok(typeof payload.counts.all === 'number');
+  });
+
+  test('GET /tasks/summary не перехватывается :id', async () => {
+    const { response } = await request('/whatsapp/tasks/summary');
+    assert.equal(response.status, 200);
+  });
+
+  test('GET /tasks/:id возвращает задачу с полями исходного сообщения', async () => {
+    const { payload: list } = await request('/whatsapp/tasks');
+    const task = list.items.find((t) => t.messageId === ingestedMsgId);
+    const { response, payload } = await request(`/whatsapp/tasks/${task.id}`);
+    assert.equal(response.status, 200);
+    assert.ok(payload.message, 'должно быть поле message с данными сообщения');
+    assert.ok(Array.isArray(payload.message.attachments));
+  });
+
+  test('GET /tasks/:id несуществующей задачи → 404', async () => {
+    const { response } = await request('/whatsapp/tasks/999999');
+    assert.equal(response.status, 404);
+  });
+
+  test('PUT /tasks/:id меняет тему и статус → 200', async () => {
+    const { payload: list } = await request('/whatsapp/tasks');
+    const task = list.items.find((t) => t.messageId === ingestedMsgId);
+    const { response, payload } = await request(`/whatsapp/tasks/${task.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ subject: 'Обновлённая тема', priority: 'high', status: 'in_progress' }),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(payload.subject, 'Обновлённая тема');
+    assert.equal(payload.status, 'in_progress');
+    assert.equal(payload.priority, 'high');
+  });
+
+  test('GET /tasks/:id отражает обновления из PUT', async () => {
+    const { payload: list } = await request('/whatsapp/tasks');
+    const task = list.items.find((t) => t.messageId === ingestedMsgId);
+    const { payload } = await request(`/whatsapp/tasks/${task.id}`);
+    assert.equal(payload.subject, 'Обновлённая тема');
+    assert.equal(payload.status, 'in_progress');
+  });
+
+  test('PUT /tasks/:id с пустым subject → 400', async () => {
+    const { payload: list } = await request('/whatsapp/tasks');
+    const task = list.items.find((t) => t.messageId === ingestedMsgId);
+    const { response } = await request(`/whatsapp/tasks/${task.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ subject: '', priority: 'normal', status: 'new' }),
+    });
+    assert.equal(response.status, 400);
+  });
+
+  test('PUT /tasks/:id несуществующей → 404', async () => {
+    const { response } = await request('/whatsapp/tasks/999999', {
+      method: 'PUT',
+      body: JSON.stringify({ subject: 'Тест', priority: 'normal', status: 'new' }),
+    });
+    assert.equal(response.status, 404);
   });
 });

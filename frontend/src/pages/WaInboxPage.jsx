@@ -3,19 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchConnectorStatus, fetchWaMessages, fetchWaSummary } from '../api/whatsappApi.js';
 import { EmptyState, ErrorState, LoadingState } from '../components/States.jsx';
 import { formatDateTime } from '../utils/formatters.js';
+import { WaMessageDrawer } from './WaMessageDrawer.jsx';
+import { WaTasksView } from './WaTasksView.jsx';
 
 const STATUS_LABELS = {
   new: 'Новое',
   in_progress: 'В работе',
   task_created: 'Задача',
   archived: 'Архив',
-};
-
-const STATUS_CODES = {
-  new: 'new',
-  in_progress: 'in_progress',
-  task_created: 'task_created',
-  archived: 'archived',
 };
 
 const ATTACHMENT_PLACEHOLDERS = {
@@ -93,7 +88,7 @@ function AttachmentsCell({ count }) {
   );
 }
 
-function InboxTable({ rows }) {
+function InboxTable({ rows, onRowClick }) {
   if (!rows.length) {
     return (
       <EmptyState
@@ -118,7 +113,11 @@ function InboxTable({ rows }) {
         </thead>
         <tbody>
           {rows.map((msg) => (
-            <tr key={msg.id}>
+            <tr
+              key={msg.id}
+              className="clickable-row"
+              onClick={() => onRowClick(msg.id)}
+            >
               <td>
                 <SenderCell
                   chatType={msg.chatType}
@@ -148,20 +147,21 @@ function InboxTable({ rows }) {
   );
 }
 
+// Фильтр-вкладки инбокса: «В работе» убрана из UI (статус живёт в БД)
 const FILTER_TABS = [
   { label: 'Все', value: null },
   { label: 'Новое', value: 'new' },
-  { label: 'В работе', value: 'in_progress' },
   { label: 'Задача', value: 'task_created' },
   { label: 'Архив', value: 'archived' },
 ];
 
-export function WaInboxPage({ page }) {
+function InboxView({ onOpenTask }) {
   const [activeStatus, setActiveStatus] = useState(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [tableState, setTableState] = useState({ error: '', isLoading: true, rows: [], total: 0 });
   const [counts, setCounts] = useState({ new: 0, in_progress: 0, task_created: 0, archived: 0, all: 0 });
   const [connectorStatus, setConnectorStatus] = useState(null);
+  const [openMessageId, setOpenMessageId] = useState(null);
   const requestIdRef = useRef(0);
   const pollingRef = useRef(null);
 
@@ -227,18 +227,14 @@ export function WaInboxPage({ page }) {
     setLimit((l) => l + PAGE_SIZE);
   }
 
+  function handleDrawerAction() {
+    loadMessages(activeStatus, limit);
+  }
+
   const hasMore = tableState.rows.length < tableState.total;
 
   return (
-    <section className="page">
-      <div className="page-heading">
-        <div>
-          <p className="section-label">{page.kicker}</p>
-          <h2>{page.title}</h2>
-          <p>{page.description}</p>
-        </div>
-      </div>
-
+    <>
       <ConnectorBanner status={connectorStatus} />
 
       <div className="wa-filter-tabs" role="tablist" aria-label="Фильтр по статусу">
@@ -271,7 +267,7 @@ export function WaInboxPage({ page }) {
       ) : null}
 
       {!tableState.isLoading && !tableState.error ? (
-        <InboxTable rows={tableState.rows} />
+        <InboxTable rows={tableState.rows} onRowClick={(id) => setOpenMessageId(id)} />
       ) : null}
 
       {!tableState.isLoading && !tableState.error && hasMore ? (
@@ -281,6 +277,61 @@ export function WaInboxPage({ page }) {
           </button>
         </div>
       ) : null}
+
+      {openMessageId ? (
+        <WaMessageDrawer
+          messageId={openMessageId}
+          onClose={() => setOpenMessageId(null)}
+          onAction={handleDrawerAction}
+          onOpenTask={() => {
+            setOpenMessageId(null);
+            onOpenTask();
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+export function WaInboxPage({ page }) {
+  const [view, setView] = useState('inbox');
+
+  return (
+    <section className="page">
+      <div className="page-heading">
+        <div>
+          <p className="section-label">{page.kicker}</p>
+          <h2>{page.title}</h2>
+          <p>{page.description}</p>
+        </div>
+      </div>
+
+      <div className="wa-section-tabs" role="tablist" aria-label="Раздел WhatsApp">
+        <button
+          role="tab"
+          aria-selected={view === 'inbox'}
+          className={`wa-section-tab ${view === 'inbox' ? 'wa-section-tab--active' : ''}`}
+          type="button"
+          onClick={() => setView('inbox')}
+        >
+          Инбокс
+        </button>
+        <button
+          role="tab"
+          aria-selected={view === 'tasks'}
+          className={`wa-section-tab ${view === 'tasks' ? 'wa-section-tab--active' : ''}`}
+          type="button"
+          onClick={() => setView('tasks')}
+        >
+          Задачи
+        </button>
+      </div>
+
+      {view === 'inbox' ? (
+        <InboxView onOpenTask={() => setView('tasks')} />
+      ) : (
+        <WaTasksView />
+      )}
     </section>
   );
 }
