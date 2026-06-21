@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { fetchWaSummary } from '../api/whatsappApi.js';
 import { navigationItems } from '../sections.js';
 
 function NavIcon({ name }) {
@@ -78,6 +79,14 @@ function NavIcon({ name }) {
     );
   }
 
+  if (name === 'whatsapp') {
+    return (
+      <svg {...props}>
+        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+      </svg>
+    );
+  }
+
   return null;
 }
 
@@ -95,6 +104,31 @@ function getIsActive(currentPath, itemPath) {
 
 export function AppShell({ children, currentPath, navigate }) {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [waNewCount, setWaNewCount] = useState(0);
+  const pollingRef = useRef(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    function loadSummary() {
+      if (document.visibilityState === 'hidden') return;
+      fetchWaSummary()
+        .then((data) => {
+          if (isMounted) setWaNewCount(data?.counts?.new ?? 0);
+        })
+        .catch(() => {});
+    }
+
+    loadSummary();
+    pollingRef.current = setInterval(loadSummary, 15000);
+    document.addEventListener('visibilitychange', loadSummary);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollingRef.current);
+      document.removeEventListener('visibilitychange', loadSummary);
+    };
+  }, []);
 
   useEffect(() => {
     setIsMobileNavOpen(false);
@@ -149,6 +183,9 @@ export function AppShell({ children, currentPath, navigate }) {
             >
               <NavIcon name={item.icon} />
               <span>{item.title}</span>
+              {item.path === '/whatsapp' && waNewCount > 0 ? (
+                <span aria-label={`${waNewCount} новых`} className="nav-badge">{waNewCount}</span>
+              ) : null}
             </a>
           ))}
         </nav>

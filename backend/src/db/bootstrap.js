@@ -96,6 +96,7 @@ const SCHEMA_SQL = `
     body TEXT,
     wa_timestamp TEXT NOT NULL,
     client_id INTEGER,
+    processing_status TEXT NOT NULL DEFAULT 'new' CHECK (processing_status IN ('new','in_progress','task_created','archived')),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (receiver_id) REFERENCES wa_receivers(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (client_id) REFERENCES clients(id) ON UPDATE CASCADE ON DELETE RESTRICT
@@ -227,6 +228,21 @@ const DEMO_DATA_SQL = `
     (23, 14, 4, date('now', '-1 days'), 'Собрали вопросы клиента по экспортным операциям и подготовили список сценариев.', 1),
     (24, 14, 1, date('now', '-1 days'), 'Провели консультацию по валютному учету и курсовым разницам.', 1.5),
     (25, 5, 2, date('now', '-5 days'), 'Согласовали правила сопоставления номенклатуры для обмена с сайтом.', 1.5);
+
+  INSERT INTO wa_connector_status (receiver_id, state, last_heartbeat_at, updated_at) VALUES
+    (1, 'ready', datetime('now', '-3 minutes'), datetime('now', '-3 minutes'));
+
+  INSERT INTO wa_messages (id, wa_message_id, receiver_id, sender_phone, sender_name, chat_type, group_name, body, wa_timestamp, client_id, processing_status) VALUES
+    (1, 'demo_msg_001', 1, '77011001010', 'Ирина Смирнова', 'private', NULL, 'Добрый день! После обновления 1С не запускается база, выдаёт ошибку. Можете помочь?', datetime('now', '-2 hours'), 1, 'new'),
+    (2, 'demo_msg_002', 1, '77072002020', 'Данияр Сейтов', 'private', NULL, 'Здравствуйте, нужна консультация по интеграции с Bitrix24', datetime('now', '-4 hours'), 2, 'in_progress'),
+    (3, 'demo_msg_003', 1, '70000000001', 'Клиент', 'private', NULL, 'Привет, как настроить права пользователей?', datetime('now', '-1 days'), NULL, 'new'),
+    (4, 'demo_msg_004', 1, '77772223344', NULL, 'group', 'Поддержка 1С — Восток-Трейд', 'Коллеги, у нас проблема с закрытием месяца, кто может помочь?', datetime('now', '-5 hours'), 4, 'task_created'),
+    (5, 'demo_msg_005', 1, '77021112233', 'Алия Турсунова', 'private', NULL, NULL, datetime('now', '-30 minutes'), 5, 'new'),
+    (6, 'demo_msg_006', 1, '77751020304', 'Руслан Муханов', 'private', NULL, 'Спасибо, вопрос решён!', datetime('now', '-3 days'), 6, 'archived');
+
+  INSERT INTO wa_attachments (id, message_id, kind, availability, original_name, mime_type, size_bytes, stored_path) VALUES
+    (1, 5, 'photo', 'not_stored', 'screenshot.jpg', 'image/jpeg', 245000, NULL),
+    (2, 5, 'voice', 'not_stored', NULL, 'audio/ogg', 48000, NULL);
 `;
 
 function getCount(db, tableName) {

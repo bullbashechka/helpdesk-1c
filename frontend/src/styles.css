@@ -394,6 +394,167 @@ h2 {
   color: #475569;
 }
 
+/* WhatsApp inbox — processing status badges */
+.status-badge--wa-new {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-badge--wa-in_progress {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.status-badge--wa-task_created {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-badge--wa-archived {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Nav badge (unread count) */
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #4338ca;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Connector status banner */
+.connector-banner {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.connector-banner--warn {
+  background: #fef9c3;
+  color: #713f12;
+}
+
+.connector-banner__icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+/* WhatsApp filter tabs */
+.wa-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.wa-tab {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+
+.wa-tab:hover {
+  border-color: #6366f1;
+  color: #4338ca;
+}
+
+.wa-tab--active {
+  border-color: #4338ca;
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.wa-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #4338ca;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.wa-tab--active .wa-tab-count {
+  background: #4338ca;
+}
+
+/* WhatsApp table cells */
+.wa-body-cell {
+  max-width: 300px;
+  color: #4b5563;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.wa-date-cell {
+  white-space: nowrap;
+}
+
+.wa-attachment-cell {
+  white-space: nowrap;
+  color: #6366f1;
+  font-size: 0.85rem;
+}
+
+/* Group chip */
+.wa-group-chip {
+  display: block;
+  max-width: 160px;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 0.75rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Unrecognized client chip */
+.wa-unrecognized-chip {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+/* Show more button row */
+.wa-show-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
 .clickable-row {
   cursor: pointer;
 }

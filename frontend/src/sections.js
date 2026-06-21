@@ -58,6 +58,15 @@ export const resourcePages = [
     type: 'tickets',
   },
   {
+    description: 'Входящие сообщения WhatsApp: триаж, привязка к клиентам, создание задач.',
+    icon: 'whatsapp',
+    kicker: 'WhatsApp',
+    path: '/whatsapp',
+    shortLabel: 'WA',
+    title: 'Вопросы с WhatsApp',
+    type: 'wa-inbox',
+  },
+  {
     buildFormFields: ({ row }) => clientFields.map((field) => withRowDefault(field, row)),
     columns: [
       { key: 'name', label: 'Клиент' },

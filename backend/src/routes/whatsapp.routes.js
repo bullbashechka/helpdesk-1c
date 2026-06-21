@@ -4,8 +4,10 @@ import { env } from '../config/env.js';
 import {
   getAttachmentForDownload,
   getConnectorStatus,
+  getMessagesSummary,
   getMessageWithAttachments,
   ingestMessage,
+  listMessages,
   upsertConnectorStatus,
 } from '../services/whatsapp.service.js';
 
@@ -36,6 +38,16 @@ whatsappRouter.post('/status', requireConnectorToken, (req, res) => {
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
+});
+
+whatsappRouter.get('/messages/summary', (req, res) => {
+  res.json(getMessagesSummary());
+});
+
+whatsappRouter.get('/messages', (req, res) => {
+  const { status, limit, offset } = req.query;
+  const result = listMessages({ status, limit, offset });
+  res.json(result);
 });
 
 whatsappRouter.get('/attachments/:id', (req, res) => {

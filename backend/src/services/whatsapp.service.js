@@ -163,3 +163,85 @@ export function getMessageWithAttachments(id) {
 
   return { ...message, attachments };
 }
+
+const VALID_STATUSES = new Set(['new', 'in_progress', 'task_created', 'archived']);
+
+export function listMessages({ status, limit = 50, offset = 0 } = {}) {
+  const db = getDatabase();
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const safeOffset = Math.max(Number(offset) || 0, 0);
+  const filterStatus = VALID_STATUSES.has(status) ? status : null;
+
+  const where = filterStatus ? `WHERE m.processing_status = '${filterStatus}'` : '';
+
+  const rows = db
+    .prepare(
+      `SELECT
+         m.id,
+         m.wa_message_id,
+         m.sender_phone,
+         m.sender_name,
+         m.chat_type,
+         m.group_name,
+         m.body,
+         m.wa_timestamp,
+         m.created_at,
+         m.client_id,
+         m.processing_status,
+         c.name AS client_name,
+         COUNT(a.id) AS attachments_count,
+         GROUP_CONCAT(DISTINCT a.kind) AS attachment_kinds
+       FROM wa_messages m
+       LEFT JOIN clients c ON c.id = m.client_id
+       LEFT JOIN wa_attachments a ON a.message_id = m.id
+       ${where}
+       GROUP BY m.id
+       ORDER BY m.wa_timestamp DESC, m.id DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(safeLimit, safeOffset);
+
+  const total = db
+    .prepare(`SELECT COUNT(*) AS cnt FROM wa_messages m ${where}`)
+    .get()?.cnt ?? 0;
+
+  return {
+    items: rows.map((r) => ({
+      id: r.id,
+      waMessageId: r.wa_message_id,
+      senderPhone: r.sender_phone,
+      senderName: r.sender_name,
+      chatType: r.chat_type,
+      groupName: r.group_name,
+      body: r.body,
+      waTimestamp: r.wa_timestamp,
+      createdAt: r.created_at,
+      clientId: r.client_id,
+      clientName: r.client_name ?? null,
+      processingStatus: r.processing_status,
+      attachmentsCount: r.attachments_count ?? 0,
+      attachmentKinds: r.attachment_kinds ? r.attachment_kinds.split(',') : [],
+    })),
+    total,
+  };
+}
+
+export function getMessagesSummary() {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT processing_status AS status, COUNT(*) AS cnt
+       FROM wa_messages
+       GROUP BY processing_status`,
+    )
+    .all();
+
+  const counts = { new: 0, in_progress: 0, task_created: 0, archived: 0, all: 0 };
+  for (const row of rows) {
+    if (VALID_STATUSES.has(row.status)) {
+      counts[row.status] = row.cnt;
+    }
+    counts.all += row.cnt;
+  }
+  return { counts };
+}

@@ -295,4 +295,69 @@ describe('WhatsApp API smoke', () => {
     assert.equal(response.status, 201);
     assert.equal(payload.deduplicated, false);
   });
+
+  test('GET /whatsapp/messages возвращает items и counts', async () => {
+    const { response, payload } = await request('/whatsapp/messages');
+    assert.equal(response.status, 200);
+    assert.ok(Array.isArray(payload.items), 'items должен быть массивом');
+    assert.ok(typeof payload.total === 'number', 'total должен быть числом');
+  });
+
+  test('GET /whatsapp/messages — заингещенное сообщение присутствует с processingStatus new', async () => {
+    const { payload } = await request('/whatsapp/messages');
+    const found = payload.items.find((m) => m.waMessageId === baseMessage.wa_message_id);
+    assert.ok(found, 'первое тестовое сообщение должно быть в списке');
+    assert.equal(found.processingStatus, 'new');
+  });
+
+  test('GET /whatsapp/messages?status=archived — не возвращает новые сообщения', async () => {
+    const { payload } = await request('/whatsapp/messages?status=archived');
+    assert.ok(Array.isArray(payload.items));
+    const hasNew = payload.items.some((m) => m.processingStatus === 'new');
+    assert.equal(hasNew, false, 'в архивном фильтре не должно быть новых');
+  });
+
+  test('GET /whatsapp/messages?limit=2 ограничивает выдачу', async () => {
+    const { payload } = await request('/whatsapp/messages?limit=2');
+    assert.ok(payload.items.length <= 2);
+  });
+
+  test('GET /whatsapp/messages?offset=1000 возвращает пустой список', async () => {
+    const { payload } = await request('/whatsapp/messages?offset=1000');
+    assert.equal(payload.items.length, 0);
+  });
+
+  test('GET /whatsapp/messages/summary возвращает counts с new >= 1', async () => {
+    const { response, payload } = await request('/whatsapp/messages/summary');
+    assert.equal(response.status, 200);
+    assert.ok(typeof payload.counts === 'object', 'counts должен быть объектом');
+    assert.ok(typeof payload.counts.new === 'number');
+    assert.ok(payload.counts.new >= 1, 'должно быть хотя бы одно новое сообщение');
+    assert.ok(typeof payload.counts.all === 'number');
+  });
+
+  test('GET /whatsapp/messages/summary не перехватывается маршрутом :id', async () => {
+    const { response } = await request('/whatsapp/messages/summary');
+    assert.equal(response.status, 200);
+  });
+
+  test('сообщение с фото даёт attachmentsCount >= 1 и attachmentKinds', async () => {
+    const { payload: ingest } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_INBOX_ATT_1',
+        attachments: [
+          { kind: 'photo', availability: 'stored', original_name: 'x.png', mime_type: 'image/png', data_base64: PNG_BASE64 },
+        ],
+      }),
+    });
+    const { payload } = await request('/whatsapp/messages');
+    const found = payload.items.find((m) => m.id === ingest.id);
+    assert.ok(found, 'сообщение с вложением должно быть в списке');
+    assert.ok(found.attachmentsCount >= 1);
+    assert.ok(Array.isArray(found.attachmentKinds));
+    assert.ok(found.attachmentKinds.includes('photo'));
+  });
 });

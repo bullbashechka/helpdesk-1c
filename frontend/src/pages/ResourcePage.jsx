@@ -8,6 +8,7 @@ import { FormModal } from '../components/FormModal.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../components/States.jsx';
 import { ReportsPage } from './ReportsPage.jsx';
 import { TicketListPage } from './TicketListPage.jsx';
+import { WaInboxPage } from './WaInboxPage.jsx';
 import { formatDate, formatDateTime, formatDeadline, formatNumber } from '../utils/formatters.js';
 
 function normalizeRows(payload) {
@@ -366,6 +367,10 @@ export function ResourcePage({ navigate, page }) {
 
   if (page.type === 'reports') {
     return <ReportsPage page={page} />;
+  }
+
+  if (page.type === 'wa-inbox') {
+    return <WaInboxPage page={page} />;
   }
 
   return (
