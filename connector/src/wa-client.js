@@ -94,6 +94,7 @@ export function createWaClient({ queue, statusReporter }) {
   });
 
   let firstAuthAt = loadFirstAuthAt(config.sessionDir);
+  let isRegenerating = false;
 
   client.on('qr', async (qr) => {
     console.log('[wa-client] QR code received — scan with WhatsApp');
@@ -147,8 +148,23 @@ export function createWaClient({ queue, statusReporter }) {
     queue.enqueue(payload);
   });
 
+  async function regenerate() {
+    if (isRegenerating) return;
+    isRegenerating = true;
+    console.log('[wa-client] regenerating QR — destroying and reinitializing');
+    try {
+      await client.destroy();
+      await client.initialize();
+    } catch (err) {
+      console.error(`[wa-client] regenerate failed: ${err?.message ?? err}`);
+    } finally {
+      isRegenerating = false;
+    }
+  }
+
   return {
     init: () => client.initialize(),
     destroy: () => client.destroy(),
+    regenerate,
   };
 }

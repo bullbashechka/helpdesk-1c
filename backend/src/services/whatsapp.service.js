@@ -114,15 +114,34 @@ export function upsertConnectorStatus(payload) {
   const receiver = db.prepare('SELECT id FROM wa_receivers WHERE id = ?').get(receiverId);
   if (!receiver) throw new Error('Приёмник не найден.');
 
+  const before = db
+    .prepare('SELECT regenerate_requested FROM wa_connector_status WHERE receiver_id = ?')
+    .get(receiverId);
+  const wasRequested = (before?.regenerate_requested ?? 0) === 1;
+
   db.prepare(
-    `INSERT INTO wa_connector_status (receiver_id, state, qr_data_url, last_heartbeat_at, updated_at)
-     VALUES (?, ?, ?, ?, datetime('now'))
+    `INSERT INTO wa_connector_status (receiver_id, state, qr_data_url, last_heartbeat_at, regenerate_requested, updated_at)
+     VALUES (?, ?, ?, ?, 0, datetime('now'))
      ON CONFLICT(receiver_id) DO UPDATE SET
        state = excluded.state,
        qr_data_url = excluded.qr_data_url,
        last_heartbeat_at = excluded.last_heartbeat_at,
+       regenerate_requested = 0,
        updated_at = datetime('now')`,
   ).run(receiverId, state, qr_data_url ?? null, last_heartbeat_at ?? new Date().toISOString());
+
+  return { regenerate_requested: wasRequested };
+}
+
+export function requestRegenerate(receiverId = 1) {
+  const db = getDatabase();
+  db.prepare(
+    `INSERT INTO wa_connector_status (receiver_id, state, regenerate_requested, updated_at)
+     VALUES (?, 'disconnected', 1, datetime('now'))
+     ON CONFLICT(receiver_id) DO UPDATE SET
+       regenerate_requested = 1,
+       updated_at = datetime('now')`,
+  ).run(Number(receiverId));
 }
 
 export function getConnectorStatus(receiverId = 1) {

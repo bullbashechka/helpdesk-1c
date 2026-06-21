@@ -6,10 +6,12 @@ export function createStatusReporter() {
   let currentState = 'disconnected';
   let currentQr = null;
   let interval = null;
+  let regenerateHandler = null;
+  let regenerating = false;
 
   async function send() {
     try {
-      await fetch(STATUS_URL, {
+      const res = await fetch(STATUS_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -22,6 +24,13 @@ export function createStatusReporter() {
           last_heartbeat_at: new Date().toISOString(),
         }),
       });
+      if (res.ok && regenerateHandler && !regenerating) {
+        const body = await res.json().catch(() => null);
+        if (body?.regenerate_requested === true) {
+          regenerating = true;
+          regenerateHandler().finally(() => { regenerating = false; });
+        }
+      }
     } catch (err) {
       console.warn(`[status] heartbeat failed: ${err.message}`);
     }
@@ -33,6 +42,10 @@ export function createStatusReporter() {
     send(); // immediate on state change
   }
 
+  function onRegenerate(fn) {
+    regenerateHandler = fn;
+  }
+
   function start() {
     interval = setInterval(send, config.heartbeatIntervalMs);
   }
@@ -41,5 +54,5 @@ export function createStatusReporter() {
     if (interval) clearInterval(interval);
   }
 
-  return { setState, start, stop };
+  return { setState, onRegenerate, start, stop };
 }

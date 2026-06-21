@@ -16,6 +16,10 @@ export function fetchConnectorStatus() {
   return apiClient.get('/whatsapp/status');
 }
 
+export function requestQrRegenerate() {
+  return apiClient.post('/whatsapp/regenerate');
+}
+
 export function fetchWaMessage(id) {
   return apiClient.get(`/whatsapp/messages/${id}`);
 }

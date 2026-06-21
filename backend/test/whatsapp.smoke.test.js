@@ -236,13 +236,14 @@ describe('WhatsApp API smoke', () => {
     assert.equal(msg.attachments[0].kind, 'photo');
   });
 
-  test('POST /whatsapp/status обновляет состояние → 204', async () => {
-    const { response } = await request('/whatsapp/status', {
+  test('POST /whatsapp/status обновляет состояние → 200 + regenerate_requested false', async () => {
+    const { response, payload } = await request('/whatsapp/status', {
       method: 'POST',
       body: JSON.stringify({ receiver_id: 1, state: 'ready', last_heartbeat_at: new Date().toISOString() }),
       headers: VALID_TOKEN,
     });
-    assert.equal(response.status, 204);
+    assert.equal(response.status, 200);
+    assert.equal(payload.regenerate_requested, false);
   });
 
   test('GET /whatsapp/status отражает обновлённое состояние', async () => {
@@ -262,6 +263,28 @@ describe('WhatsApp API smoke', () => {
     const { payload } = await request('/whatsapp/status');
     assert.equal(payload.state, 'qr_required');
     assert.equal(payload.qr_data_url, qr);
+  });
+
+  test('POST /whatsapp/regenerate ставит флаг → 202', async () => {
+    const { response, payload } = await request('/whatsapp/regenerate', { method: 'POST' });
+    assert.equal(response.status, 202);
+    assert.equal(payload.requested, true);
+  });
+
+  test('POST /whatsapp/status после /regenerate возвращает regenerate_requested true (read-once)', async () => {
+    await request('/whatsapp/regenerate', { method: 'POST' });
+    const { payload: first } = await request('/whatsapp/status', {
+      method: 'POST',
+      body: JSON.stringify({ receiver_id: 1, state: 'ready' }),
+      headers: VALID_TOKEN,
+    });
+    assert.equal(first.regenerate_requested, true);
+    const { payload: second } = await request('/whatsapp/status', {
+      method: 'POST',
+      body: JSON.stringify({ receiver_id: 1, state: 'ready' }),
+      headers: VALID_TOKEN,
+    });
+    assert.equal(second.regenerate_requested, false);
   });
 
   test('привязка к клиенту по нормализованному телефону', async () => {

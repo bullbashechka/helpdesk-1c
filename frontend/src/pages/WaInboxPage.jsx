@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { fetchConnectorStatus, fetchWaMessages, fetchWaSummary } from '../api/whatsappApi.js';
+import { fetchConnectorStatus, fetchWaMessages, fetchWaSummary, requestQrRegenerate } from '../api/whatsappApi.js';
 import { EmptyState, ErrorState, LoadingState } from '../components/States.jsx';
 import { formatDateTime } from '../utils/formatters.js';
 import { WaMessageDrawer } from './WaMessageDrawer.jsx';
@@ -30,6 +30,46 @@ function bodyPreview(body, attachmentKinds) {
     return attachmentKinds.map((k) => ATTACHMENT_PLACEHOLDERS[k] ?? `[${k}]`).join(' ');
   }
   return '—';
+}
+
+function RegenerateQrButton({ style }) {
+  const [isSending, setIsSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleClick() {
+    setIsSending(true);
+    setError('');
+    setSent(false);
+    try {
+      await requestQrRegenerate();
+      setSent(true);
+    } catch (err) {
+      setError(err.message || 'Не удалось отправить запрос.');
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, ...style }}>
+      <button
+        type="button"
+        className="button"
+        style={{ padding: '4px 12px', fontSize: '0.82rem', flexShrink: 0 }}
+        onClick={handleClick}
+        disabled={isSending}
+      >
+        {isSending ? 'Запрос…' : 'Перевыпустить QR'}
+      </button>
+      {sent && !error ? (
+        <span style={{ fontSize: '0.76rem', color: '#6b7280' }}>Запрос отправлен — новый код появится в течение ~15 сек.</span>
+      ) : null}
+      {error ? (
+        <span style={{ fontSize: '0.76rem', color: '#dc2626' }}>{error}</span>
+      ) : null}
+    </span>
+  );
 }
 
 function QrModal({ qrDataUrl, onClose }) {
@@ -63,9 +103,9 @@ function QrModal({ qrDataUrl, onClose }) {
           alt="QR-код для подключения WhatsApp"
           style={{ width: '100%', maxWidth: 280, height: 'auto', borderRadius: 8, border: '1px solid #e5e7eb' }}
         />
-        <p style={{ margin: '12px 0 0', fontSize: '0.8rem', color: '#9ca3af' }}>
-          Код обновляется автоматически. Закройте и откройте снова если истёк.
-        </p>
+        <div style={{ margin: '12px 0 0', display: 'flex', justifyContent: 'center' }}>
+          <RegenerateQrButton />
+        </div>
       </div>
     </div>
   );
@@ -102,6 +142,7 @@ function ConnectorBanner({ status }) {
             Показать QR
           </button>
         ) : null}
+        <RegenerateQrButton style={{ marginLeft: 8 }} />
       </div>
       {showQr && isQr ? (
         <QrModal qrDataUrl={status.qr_data_url} onClose={() => setShowQr(false)} />

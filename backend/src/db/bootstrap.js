@@ -120,6 +120,7 @@ const SCHEMA_SQL = `
     state TEXT NOT NULL CHECK (state IN ('qr_required', 'ready', 'disconnected')),
     qr_data_url TEXT,
     last_heartbeat_at TEXT,
+    regenerate_requested INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (receiver_id) REFERENCES wa_receivers(id) ON UPDATE CASCADE ON DELETE RESTRICT
   );

@@ -18,6 +18,7 @@ setInterval(() => sender.flush(), config.retryBaseMs);
 statusReporter.start();
 
 const waClient = createWaClient({ queue, statusReporter });
+statusReporter.onRegenerate(() => waClient.regenerate());
 
 process.on('SIGINT', async () => {
   console.log('\n[connector] shutting down…');

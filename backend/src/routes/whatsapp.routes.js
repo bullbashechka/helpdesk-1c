@@ -13,6 +13,7 @@ import {
   ingestMessage,
   listMessages,
   listTasks,
+  requestRegenerate,
   unarchiveMessage,
   updateTask,
   upsertConnectorStatus,
@@ -40,8 +41,17 @@ whatsappRouter.post('/ingest', requireConnectorToken, (req, res) => {
 
 whatsappRouter.post('/status', requireConnectorToken, (req, res) => {
   try {
-    upsertConnectorStatus(req.body);
-    res.status(204).end();
+    const result = upsertConnectorStatus(req.body);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+whatsappRouter.post('/regenerate', (req, res) => {
+  try {
+    requestRegenerate(req.body?.receiver_id ?? 1);
+    res.status(202).json({ requested: true });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
