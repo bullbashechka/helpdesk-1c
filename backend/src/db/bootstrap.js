@@ -263,6 +263,49 @@ const DEMO_DATA_SQL = `
     (1, 4, 4, 'Проблема с закрытием месяца', 'Коллеги, у нас проблема с закрытием месяца, кто может помочь?', 'high', 'new');
 `;
 
+// Идемпотентные миграции колонок: CREATE TABLE IF NOT EXISTS добавляет только
+// новые таблицы, но не колонки в уже существующих. Здесь перечислены колонки,
+// которые появились в схеме позже, чтобы существующие базы дотягивались до неё
+// при старте без reseed и без потери данных. Новые колонки должны иметь DEFAULT
+// (требование SQLite для ALTER TABLE ADD COLUMN с NOT NULL).
+const COLUMN_MIGRATIONS = [
+  {
+    table: 'wa_messages',
+    column: 'processing_status',
+    definition:
+      "processing_status TEXT NOT NULL DEFAULT 'new' CHECK (processing_status IN ('new','in_progress','task_created','archived'))",
+  },
+  {
+    table: 'wa_connector_status',
+    column: 'regenerate_requested',
+    definition: 'regenerate_requested INTEGER NOT NULL DEFAULT 0',
+  },
+];
+
+function tableExists(db, tableName) {
+  return Boolean(
+    db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(tableName),
+  );
+}
+
+function columnExists(db, tableName, columnName) {
+  return db
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all()
+    .some((column) => column.name === columnName);
+}
+
+function applyColumnMigrations(db) {
+  for (const { table, column, definition } of COLUMN_MIGRATIONS) {
+    if (!tableExists(db, table) || columnExists(db, table, column)) {
+      continue;
+    }
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+  }
+}
+
 function getCount(db, tableName) {
   return db.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get()?.count ?? 0;
 }
@@ -274,6 +317,7 @@ function shouldSeedDemoData(db) {
 
 export function initializeDatabase(db) {
   db.exec(SCHEMA_SQL);
+  applyColumnMigrations(db);
   db.exec(REFERENCE_DATA_SQL);
 
   if (shouldSeedDemoData(db)) {
