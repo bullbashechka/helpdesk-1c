@@ -28,6 +28,20 @@ npm.cmd run dev
 
 Важно: проект ожидает `Node 24+`. На `Node 20` demo seed и backend могут не стартовать, если не собран native-модуль `better-sqlite3`.
 
+### Запуск в двух терминалах (с шорткатами Vite)
+
+`npm run dev` запускает frontend через `concurrently`, поэтому **интерактивные шорткаты Vite недоступны** (`r` — restart, `h` — help, `u`, `o`, `c`, `q`). Они работают только когда у Vite есть настоящий TTY, а `concurrently` склеивает вывод и проксирует stdin через pipe. Через `concurrently` это не лечится.
+
+Если шорткаты нужны — запускай backend и frontend по отдельности, каждый в своём терминале:
+
+```bash
+npm run dev:backend    # терминал 1 — backend на :4000
+```
+
+```bash
+npm run dev:frontend   # терминал 2 — frontend на :5173, здесь работают шорткаты Vite
+```
+
 ## База данных и демо-данные
 
 SQLite-файл создается автоматически по пути `backend/data/helpdesk.sqlite`, если его еще нет.
@@ -65,9 +79,10 @@ npm.cmd run seed:demo
 ## Команды
 
 ```bash
-npm run dev           # frontend и backend одновременно
-npm run dev:frontend  # только Vite frontend
+npm run dev           # frontend и backend одновременно (без шорткатов Vite)
+npm run dev:frontend  # только Vite frontend (шорткаты Vite работают)
 npm run dev:backend   # только Express backend
+npm run dev:connector # только WhatsApp-коннектор, с watch mode
 npm run build         # production build frontend
 npm run start         # запуск backend без watch mode
 npm test              # backend API smoke + frontend тесты
