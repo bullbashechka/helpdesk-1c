@@ -21,6 +21,10 @@ backend/data/*.sqlite-shm
 backend/data/wa-attachments/
 connector/data/
 
+# whatsapp-web.js (коннектор): кэш версии WA Web и папка сессии/авторизации
+connector/.wwebjs_cache/
+connector/.wwebjs_auth/
+
 # Runtime logs
 *.log
 npm-debug.log*
