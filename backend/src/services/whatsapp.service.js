@@ -327,7 +327,12 @@ export function createTaskFromMessage(input) {
 
   const descTrimmed = description != null ? String(description).trim() || null : null;
 
-  const newId = db.transaction(() => {
+  // Портативная транзакция через BEGIN/COMMIT: метод db.transaction() есть только
+  // у better-sqlite3, но не у fallback node:sqlite (DatabaseSync). Оба движка
+  // поддерживают exec('BEGIN'/'COMMIT'/'ROLLBACK').
+  let newId;
+  db.exec('BEGIN');
+  try {
     const result = db
       .prepare(
         `INSERT INTO wa_tasks (message_id, client_id, subject, description, priority)
@@ -335,8 +340,12 @@ export function createTaskFromMessage(input) {
       )
       .run(Number(msg.id), msg.client_id, subjectTrimmed, descTrimmed, priority);
     db.prepare("UPDATE wa_messages SET processing_status = 'task_created' WHERE id = ?").run(Number(msg.id));
-    return Number(result.lastInsertRowid);
-  })();
+    newId = Number(result.lastInsertRowid);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 
   return getTaskById(newId);
 }
