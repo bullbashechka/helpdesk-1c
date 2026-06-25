@@ -555,6 +555,20 @@ h2 {
   margin-top: 20px;
 }
 
+.wa-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.wa-pagination__info {
+  font-size: 0.88rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
 /* Section top-level tabs (Инбокс / Задачи) */
 .wa-section-tabs {
   display: flex;
@@ -594,6 +608,7 @@ h2 {
   inset: 0;
   z-index: 200;
   background: rgba(0, 0, 0, 0.25);
+  animation: wa-drawer-fade-in 0.2s ease-out;
 }
 
 .wa-drawer {
@@ -608,6 +623,24 @@ h2 {
   background: #fff;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
   overflow: hidden;
+  animation: wa-drawer-slide-in 0.22s ease-out;
+}
+
+@keyframes wa-drawer-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes wa-drawer-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wa-drawer-backdrop,
+  .wa-drawer {
+    animation: none;
+  }
 }
 
 .wa-drawer__header {

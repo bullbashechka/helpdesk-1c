@@ -20,7 +20,7 @@ const ATTACHMENT_PLACEHOLDERS = {
   voice: '[Голосовое]',
 };
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 20;
 
 function bodyPreview(body, attachmentKinds) {
   if (body && body.trim()) {
@@ -254,7 +254,7 @@ const FILTER_TABS = [
 
 function InboxView({ onOpenTask }) {
   const [activeStatus, setActiveStatus] = useState(null);
-  const [limit, setLimit] = useState(PAGE_SIZE);
+  const [page, setPage] = useState(0);
   const [tableState, setTableState] = useState({ error: '', isLoading: true, rows: [], total: 0 });
   const [counts, setCounts] = useState({ new: 0, in_progress: 0, task_created: 0, archived: 0, all: 0 });
   const [connectorStatus, setConnectorStatus] = useState(null);
@@ -262,21 +262,29 @@ function InboxView({ onOpenTask }) {
   const requestIdRef = useRef(0);
   const pollingRef = useRef(null);
 
-  async function loadMessages(status, currentLimit) {
+  async function loadMessages(status, currentPage) {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     setTableState((s) => ({ ...s, error: '', isLoading: true }));
 
     try {
       const [data, summary] = await Promise.all([
-        fetchWaMessages({ status: status ?? undefined, limit: currentLimit }),
+        fetchWaMessages({ status: status ?? undefined, limit: PAGE_SIZE, offset: currentPage * PAGE_SIZE }),
         fetchWaSummary(),
       ]);
 
-      if (requestIdRef.current === requestId) {
-        setTableState({ error: '', isLoading: false, rows: data.items ?? [], total: data.total ?? 0 });
-        setCounts(summary?.counts ?? counts);
+      if (requestIdRef.current !== requestId) return;
+
+      const total = data.total ?? 0;
+      // Если страница вышла за пределы (например, после архивации последнего сообщения) — откатываемся.
+      const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
+      if (currentPage > lastPage) {
+        setPage(lastPage);
+        return;
       }
+
+      setTableState({ error: '', isLoading: false, rows: data.items ?? [], total });
+      setCounts(summary?.counts ?? counts);
     } catch (error) {
       if (requestIdRef.current === requestId) {
         setTableState((s) => ({ ...s, error: error.message, isLoading: false }));
@@ -298,11 +306,11 @@ function InboxView({ onOpenTask }) {
   }, []);
 
   useEffect(() => {
-    loadMessages(activeStatus, limit);
+    loadMessages(activeStatus, page);
 
     function tick() {
       if (document.visibilityState === 'hidden') return;
-      loadMessages(activeStatus, limit);
+      loadMessages(activeStatus, page);
       loadConnectorStatus();
     }
 
@@ -313,22 +321,21 @@ function InboxView({ onOpenTask }) {
       clearInterval(pollingRef.current);
       document.removeEventListener('visibilitychange', tick);
     };
-  }, [activeStatus, limit]);
+  }, [activeStatus, page]);
 
   function handleTabChange(value) {
     setActiveStatus(value);
-    setLimit(PAGE_SIZE);
-  }
-
-  function handleShowMore() {
-    setLimit((l) => l + PAGE_SIZE);
+    setPage(0);
   }
 
   function handleDrawerAction() {
-    loadMessages(activeStatus, limit);
+    loadMessages(activeStatus, page);
   }
 
-  const hasMore = tableState.rows.length < tableState.total;
+  const totalPages = Math.max(1, Math.ceil(tableState.total / PAGE_SIZE));
+  // Полноэкранный спиннер — только при первой загрузке. Фоновый polling и смена
+  // страницы не должны прятать уже показанную таблицу и навигацию.
+  const showSpinner = tableState.isLoading && tableState.rows.length === 0;
 
   return (
     <>
@@ -354,23 +361,39 @@ function InboxView({ onOpenTask }) {
         })}
       </div>
 
-      {tableState.isLoading ? <LoadingState title="Загружаем сообщения..." /> : null}
+      {showSpinner ? <LoadingState title="Загружаем сообщения..." /> : null}
 
-      {!tableState.isLoading && tableState.error ? (
+      {!showSpinner && tableState.error ? (
         <ErrorState
           message={tableState.error}
-          onRetry={() => loadMessages(activeStatus, limit)}
+          onRetry={() => loadMessages(activeStatus, page)}
         />
       ) : null}
 
-      {!tableState.isLoading && !tableState.error ? (
+      {!showSpinner && !tableState.error ? (
         <InboxTable rows={tableState.rows} onRowClick={(id) => setOpenMessageId(id)} />
       ) : null}
 
-      {!tableState.isLoading && !tableState.error && hasMore ? (
-        <div className="wa-show-more">
-          <button className="button button--secondary" onClick={handleShowMore} type="button">
-            Показать ещё ({tableState.total - tableState.rows.length})
+      {!showSpinner && !tableState.error && tableState.total > PAGE_SIZE ? (
+        <div className="wa-pagination">
+          <button
+            className="button button--secondary"
+            disabled={page === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            type="button"
+          >
+            ← Назад
+          </button>
+          <span className="wa-pagination__info">
+            Страница {page + 1} из {totalPages}
+          </span>
+          <button
+            className="button button--secondary"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            type="button"
+          >
+            Вперёд →
           </button>
         </div>
       ) : null}

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { fetchWaTasks, fetchWaTasksSummary, fetchWaTask, updateWaTask } from '../api/whatsappApi.js';
 import { AttachmentList } from '../components/AttachmentList.jsx';
-import { FormModal } from '../components/FormModal.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../components/States.jsx';
 import { formatDateTime } from '../utils/formatters.js';
 
@@ -110,106 +109,7 @@ function TaskTable({ rows, onRowClick }) {
   );
 }
 
-function buildEditFields(task) {
-  return [
-    {
-      name: 'subject',
-      label: 'Тема',
-      required: true,
-      defaultValue: task.subject ?? '',
-    },
-    {
-      name: 'priority',
-      label: 'Приоритет',
-      type: 'select',
-      options: PRIORITY_OPTIONS,
-      defaultValue: task.priority ?? 'normal',
-    },
-    {
-      name: 'status',
-      label: 'Статус',
-      type: 'select',
-      options: TASK_STATUS_OPTIONS,
-      defaultValue: task.status ?? 'new',
-    },
-    {
-      name: 'description',
-      label: 'Описание',
-      type: 'textarea',
-      defaultValue: task.description ?? '',
-    },
-  ];
-}
-
-function TaskEditModal({ taskId, onClose, onSaved }) {
-  const [task, setTask] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [formError, setFormError] = useState('');
-
-  useEffect(() => {
-    if (!taskId) return;
-    setIsLoading(true);
-    fetchWaTask(taskId)
-      .then((data) => {
-        setTask(data);
-        setIsLoading(false);
-      })
-      .catch(() => setIsLoading(false));
-  }, [taskId]);
-
-  async function handleSubmit(values) {
-    setIsSaving(true);
-    setFormError('');
-    try {
-      await updateWaTask(taskId, {
-        subject: values.subject,
-        priority: values.priority,
-        status: values.status,
-        description: values.description || null,
-      });
-      onSaved();
-      onClose();
-    } catch (err) {
-      setFormError(err.message || 'Не удалось сохранить задачу.');
-      setIsSaving(false);
-    }
-  }
-
-  if (isLoading || !task) {
-    return (
-      <div className="modal-backdrop" role="presentation">
-        <div className="modal" role="dialog" aria-modal="true">
-          <LoadingState title="Загружаем задачу..." />
-        </div>
-      </div>
-    );
-  }
-
-  const message = task.message;
-
-  return (
-    <>
-      <FormModal
-        title="Редактировать задачу"
-        isOpen
-        isSaving={isSaving}
-        fields={buildEditFields(task)}
-        error={formError}
-        onClose={onClose}
-        onSubmit={handleSubmit}
-        submitLabel="Сохранить"
-      />
-      {message ? (
-        <div className="modal-backdrop" role="presentation" style={{ zIndex: 9 }}>
-          {/* Дополнительная модалка с исходным сообщением показывается под основной FormModal */}
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-function TaskDetailModal({ taskId, onClose, onSaved }) {
+function TaskDetailDrawer({ taskId, onClose, onSaved }) {
   const [task, setTask] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -271,90 +171,88 @@ function TaskDetailModal({ taskId, onClose, onSaved }) {
     setEditValues((prev) => ({ ...prev, [field]: value }));
   }
 
+  const message = task?.message;
+
   return (
     <>
-      <div className="modal-backdrop" role="presentation" onClick={onClose} />
-      <div
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Задача WhatsApp"
-        style={{ maxWidth: 640, zIndex: 10 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {isLoading || !editValues ? (
-          <LoadingState title="Загружаем задачу..." />
-        ) : (
-          <>
-            <div className="modal__header">
-              <h2>Задача WhatsApp</h2>
-              <button aria-label="Закрыть" className="icon-button" onClick={onClose} type="button">×</button>
-            </div>
+      <div className="wa-drawer-backdrop" onClick={onClose} aria-hidden="true" />
+      <div className="wa-drawer" role="dialog" aria-modal="true" aria-label="Задача WhatsApp">
+        <div className="wa-drawer__header">
+          <h2 className="wa-drawer__title">
+            {isLoading ? 'Загрузка...' : (task?.subject || 'Задача WhatsApp')}
+          </h2>
+          <button className="wa-drawer__close" onClick={onClose} aria-label="Закрыть" type="button">×</button>
+        </div>
 
-            {formError ? <p className="form-error" role="alert">{formError}</p> : null}
+        <div className="wa-drawer__body">
+          {isLoading || !editValues ? (
+            <p style={{ color: '#9ca3af' }}>Загрузка задачи...</p>
+          ) : (
+            <>
+              {formError ? <p className="form-error" role="alert">{formError}</p> : null}
 
-            <form className="form-grid" noValidate onSubmit={handleSave}>
-              <label className="field">
-                <span>Тема <b aria-hidden="true">*</b></span>
-                <input
-                  type="text"
-                  value={editValues.subject}
-                  onChange={(e) => set('subject', e.target.value)}
-                  aria-invalid={fieldErrors.subject ? 'true' : 'false'}
-                />
-                {fieldErrors.subject ? <span className="field__error">{fieldErrors.subject}</span> : null}
-              </label>
+              <form className="form-grid" noValidate onSubmit={handleSave}>
+                <label className="field">
+                  <span>Тема <b aria-hidden="true">*</b></span>
+                  <input
+                    type="text"
+                    value={editValues.subject}
+                    onChange={(e) => set('subject', e.target.value)}
+                    aria-invalid={fieldErrors.subject ? 'true' : 'false'}
+                  />
+                  {fieldErrors.subject ? <span className="field__error">{fieldErrors.subject}</span> : null}
+                </label>
 
-              <label className="field">
-                <span>Приоритет</span>
-                <select value={editValues.priority} onChange={(e) => set('priority', e.target.value)}>
-                  {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
+                <label className="field">
+                  <span>Приоритет</span>
+                  <select value={editValues.priority} onChange={(e) => set('priority', e.target.value)}>
+                    {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </label>
 
-              <label className="field">
-                <span>Статус</span>
-                <select value={editValues.status} onChange={(e) => set('status', e.target.value)}>
-                  {TASK_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
+                <label className="field">
+                  <span>Статус</span>
+                  <select value={editValues.status} onChange={(e) => set('status', e.target.value)}>
+                    {TASK_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </label>
 
-              <label className="field">
-                <span>Описание</span>
-                <textarea rows={4} value={editValues.description} onChange={(e) => set('description', e.target.value)} />
-              </label>
+                <label className="field">
+                  <span>Описание</span>
+                  <textarea rows={4} value={editValues.description} onChange={(e) => set('description', e.target.value)} />
+                </label>
 
-              <div className="modal__actions">
-                <button className="button button--secondary" onClick={onClose} type="button">Отмена</button>
-                <button className="button" disabled={isSaving} type="submit">
-                  {isSaving ? 'Сохранение...' : 'Сохранить'}
-                </button>
-              </div>
-            </form>
+                <div className="wa-drawer__actions">
+                  <button className="button" disabled={isSaving} type="submit">
+                    {isSaving ? 'Сохранение...' : 'Сохранить'}
+                  </button>
+                  <button className="button button--secondary" onClick={onClose} type="button">Отмена</button>
+                </div>
+              </form>
 
-            {/* Исходное сообщение и вложения */}
-            {task?.message ? (
-              <div style={{ padding: '16px 20px', borderTop: '1px solid #e5e7eb' }}>
-                <p style={{ margin: '0 0 8px', fontWeight: 700, fontSize: '0.85rem', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Исходное сообщение
-                </p>
-                <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: '#374151' }}>
-                  <b>{task.message.sender_name || task.message.sender_phone}</b>
-                  {' · '}
-                  {formatDateTime(task.message.wa_timestamp)}
-                </p>
-                {task.message.body ? (
-                  <div className="wa-drawer__body-text" style={{ marginTop: 8 }}>{task.message.body}</div>
-                ) : null}
-                {task.message.attachments?.length > 0 ? (
-                  <div style={{ marginTop: 12 }}>
-                    <AttachmentList attachments={task.message.attachments} />
+              {/* Исходное сообщение и вложения */}
+              {message ? (
+                <>
+                  <hr className="wa-drawer__divider" />
+                  <div className="wa-drawer__meta">
+                    <span className="wa-drawer__sender">Исходное сообщение</span>
+                    <span className="wa-drawer__date">
+                      {message.sender_name || message.sender_phone}
+                      {' · '}
+                      {formatDateTime(message.wa_timestamp)}
+                    </span>
                   </div>
-                ) : null}
-              </div>
-            ) : null}
-          </>
-        )}
+                  {message.body ? (
+                    <div className="wa-drawer__body-text">{message.body}</div>
+                  ) : null}
+                  {message.attachments?.length > 0 ? (
+                    <AttachmentList attachments={message.attachments} />
+                  ) : null}
+                </>
+              ) : null}
+            </>
+          )}
+        </div>
       </div>
     </>
   );
@@ -446,7 +344,7 @@ export function WaTasksView() {
       ) : null}
 
       {editingTaskId ? (
-        <TaskDetailModal
+        <TaskDetailDrawer
           taskId={editingTaskId}
           onClose={() => setEditingTaskId(null)}
           onSaved={() => loadTasks(activeStatus, limit)}
