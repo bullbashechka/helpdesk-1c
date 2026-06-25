@@ -320,6 +320,46 @@ describe('WhatsApp API smoke', () => {
     assert.equal(payload.deduplicated, false);
   });
 
+  test('групповое сообщение создаёт клиента по названию группы и привязывает его', async () => {
+    const groupName = 'Поддержка 1С — Новая Группа';
+    const { response, payload } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_GROUP_NEW_1',
+        chat_type: 'group',
+        group_name: groupName,
+        sender_phone: '79990001122@c.us',
+      }),
+    });
+    assert.equal(response.status, 201);
+    const { payload: list } = await request('/whatsapp/messages');
+    const found = list.items.find((m) => m.id === payload.id);
+    assert.ok(found, 'групповое сообщение должно быть в списке');
+    assert.equal(found.clientName, groupName, 'клиент должен называться как группа');
+  });
+
+  test('повторное групповое сообщение из той же группы не создаёт нового клиента', async () => {
+    const groupName = 'Поддержка 1С — Новая Группа';
+    const { getDatabase } = await import('../src/db/database.js');
+    const before = getDatabase().prepare('SELECT COUNT(*) AS cnt FROM clients WHERE name = ?').get(groupName).cnt;
+    await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_GROUP_NEW_2',
+        chat_type: 'group',
+        group_name: groupName,
+        sender_phone: '79990003344@c.us',
+      }),
+    });
+    const after = getDatabase().prepare('SELECT COUNT(*) AS cnt FROM clients WHERE name = ?').get(groupName).cnt;
+    assert.equal(before, 1, 'клиент группы должен существовать после первого сообщения');
+    assert.equal(after, 1, 'повторное сообщение не должно дублировать клиента');
+  });
+
   test('GET /whatsapp/messages возвращает items и counts', async () => {
     const { response, payload } = await request('/whatsapp/messages');
     assert.equal(response.status, 200);

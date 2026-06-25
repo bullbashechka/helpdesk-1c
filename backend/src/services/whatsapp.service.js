@@ -14,6 +14,18 @@ function findClientByPhone(senderPhone) {
   return match ? match.id : null;
 }
 
+// Для групповых чатов клиент определяется по наименованию WhatsApp-группы:
+// клиент с name = group_name. Если такого клиента ещё нет — создаём его,
+// чтобы каждая новая группа сразу превращалась в клиента в справочнике.
+function resolveGroupClient(db, groupName) {
+  const name = String(groupName).trim();
+  if (!name) return null;
+  const existing = db.prepare('SELECT id FROM clients WHERE name = ?').get(name);
+  if (existing) return existing.id;
+  const result = db.prepare('INSERT INTO clients (name) VALUES (?)').run(name);
+  return Number(result.lastInsertRowid);
+}
+
 function saveAttachments(db, messageId, attachments) {
   if (!Array.isArray(attachments)) return;
 
@@ -70,7 +82,10 @@ export function ingestMessage(payload) {
   const receiver = db.prepare('SELECT id FROM wa_receivers WHERE id = ?').get(receiverId);
   if (!receiver) throw new Error('Приёмник не найден.');
 
-  const clientId = findClientByPhone(sender_phone);
+  const clientId =
+    chat_type === 'group' && !isBlank(group_name)
+      ? resolveGroupClient(db, group_name)
+      : findClientByPhone(sender_phone);
 
   const result = db
     .prepare(
