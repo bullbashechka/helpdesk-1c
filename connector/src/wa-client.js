@@ -35,7 +35,21 @@ function isGroupChat(msg) {
   return msg.from?.endsWith('@g.us') ?? false;
 }
 
-function buildPayload(msg, receiverId) {
+// Отображаемое имя (subject) группы. msg.from — это JID группы
+// (<id>@g.us), а не её название, поэтому берём имя из чата.
+// Откат на ID группы, если subject недоступен.
+async function resolveGroupName(msg) {
+  try {
+    const chat = await msg.getChat();
+    const name = chat?.name?.trim();
+    if (name) return name;
+  } catch (err) {
+    console.warn(`[wa-client] getChat failed: ${err?.message ?? err}`);
+  }
+  return normalizeJid(msg.from);
+}
+
+async function buildPayload(msg, receiverId) {
   const chatType = isGroupChat(msg) ? 'group' : 'private';
   const senderJid = chatType === 'group' ? msg.author : msg.from;
   return {
@@ -44,7 +58,7 @@ function buildPayload(msg, receiverId) {
     sender_phone: normalizeJid(senderJid),
     sender_name: msg._data?.notifyName ?? null,
     chat_type: chatType,
-    group_name: chatType === 'group' ? normalizeJid(msg.from) : null,
+    group_name: chatType === 'group' ? await resolveGroupName(msg) : null,
     body: msg.body ?? null,
     wa_timestamp: new Date(msg.timestamp * 1000).toISOString(),
   };
@@ -141,7 +155,7 @@ export function createWaClient({ queue, statusReporter }) {
       if (msgTime < firstAuthAt) return;
     }
 
-    const payload = buildPayload(msg, config.receiverId);
+    const payload = await buildPayload(msg, config.receiverId);
     payload.attachments = await buildAttachments(msg);
     if (!payload.body && payload.attachments.length === 0) return;
 
