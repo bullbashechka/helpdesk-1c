@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "db:init": "node src/db/init.js",
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js"
+    "seed:demo": "node scripts/reseed-demo.js",
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
@@ -15,6 +16,6 @@
     "express": "^4.21.2"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   }
 }

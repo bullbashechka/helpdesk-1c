@@ -1,8 +1,51 @@
+﻿# Dependencies
 node_modules/
-dist/
-.env
-*.local
-*.log
 
+# Build output and caches
+dist/
+.vite/
+coverage/
+.cache/
+
+# Environment files
+.env
+.env.*
+!.env.example
+*.local
+
+# Runtime data
 backend/data/*.sqlite
-backend/data/*.sqlite-*
+backend/data/*.sqlite-journal
+backend/data/*.sqlite-wal
+backend/data/*.sqlite-shm
+backend/data/wa-attachments/
+connector/data/
+
+# whatsapp-web.js (коннектор): кэш версии WA Web и папка сессии/авторизации
+connector/.wwebjs_cache/
+connector/.wwebjs_auth/
+
+# Runtime logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+backend-dev.*.log
+frontend-dev.*.log
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Python bytecode (skill scripts)
+__pycache__/
+*.pyc
+
+# MS Office temp/lock files
+~$*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

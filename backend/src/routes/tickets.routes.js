@@ -1,43 +1,94 @@
 import { Router } from 'express';
 
-import { asyncHandler } from '../middleware/async-handler.js';
-import { sendCreated, sendSuccess } from '../utils/http.js';
 import {
+  addWorkLog,
   createTicket,
-  deleteTicket,
-  getTicket,
+  getTicketById,
+  getTicketMeta,
   listTickets,
   updateTicket,
 } from '../services/tickets.service.js';
-import { createTicketWorkLog, listTicketWorkLogs } from '../services/work-logs.service.js';
 
 export const ticketsRouter = Router();
 
-ticketsRouter.get('/', asyncHandler((req, res) => {
-  res.json(listTickets(req.query));
-}));
+ticketsRouter.get('/', (req, res) => {
+  const search = typeof req.query.q === 'string' ? req.query.q : '';
+  const overdueOnly = req.query.overdue === '1' || req.query.overdue === 'true';
 
-ticketsRouter.post('/', asyncHandler((req, res) => {
-  sendCreated(res, createTicket(req.body));
-}));
+  res.json({ items: listTickets({ overdueOnly, search }) });
+});
 
-ticketsRouter.get('/:id', asyncHandler((req, res) => {
-  res.json(getTicket(req.params.id));
-}));
+ticketsRouter.get('/meta', (req, res) => {
+  res.json(getTicketMeta());
+});
 
-ticketsRouter.put('/:id', asyncHandler((req, res) => {
-  res.json(updateTicket(req.params.id, req.body));
-}));
+ticketsRouter.post('/', (req, res) => {
+  try {
+    const ticket = createTicket(req.body || {});
+    res.status(201).json(ticket);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
 
-ticketsRouter.delete('/:id', asyncHandler((req, res) => {
-  deleteTicket(req.params.id);
-  sendSuccess(res);
-}));
+ticketsRouter.put('/:id', (req, res) => {
+  const id = Number(req.params.id);
 
-ticketsRouter.get('/:id/work-logs', asyncHandler((req, res) => {
-  res.json(listTicketWorkLogs(req.params.id));
-}));
+  if (!Number.isInteger(id) || id < 1) {
+    res.status(400).json({ message: 'Некорректный идентификатор заявки.' });
+    return;
+  }
 
-ticketsRouter.post('/:id/work-logs', asyncHandler((req, res) => {
-  sendCreated(res, createTicketWorkLog(req.params.id, req.body));
-}));
+  try {
+    const ticket = updateTicket(id, req.body || {});
+
+    if (!ticket) {
+      res.status(404).json({ message: 'Заявка не найдена.' });
+      return;
+    }
+
+    res.json(ticket);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+ticketsRouter.post('/:id/work-logs', (req, res) => {
+  const id = Number(req.params.id);
+
+  if (!Number.isInteger(id) || id < 1) {
+    res.status(400).json({ message: 'Некорректный идентификатор заявки.' });
+    return;
+  }
+
+  try {
+    const ticket = addWorkLog(id, req.body || {});
+
+    if (!ticket) {
+      res.status(404).json({ message: 'Заявка не найдена.' });
+      return;
+    }
+
+    res.status(201).json(ticket);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+ticketsRouter.get('/:id', (req, res) => {
+  const id = Number(req.params.id);
+
+  if (!Number.isInteger(id) || id < 1) {
+    res.status(400).json({ message: 'Некорректный идентификатор заявки.' });
+    return;
+  }
+
+  const ticket = getTicketById(id);
+
+  if (!ticket) {
+    res.status(404).json({ message: 'Заявка не найдена.' });
+    return;
+  }
+
+  res.json(ticket);
+});
