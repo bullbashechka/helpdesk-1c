@@ -1,3 +1,5 @@
+import { recalculateAutoCategories } from '../services/wa-categories.js';
+
 const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS statuses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,6 +99,8 @@ const SCHEMA_SQL = `
     wa_timestamp TEXT NOT NULL,
     client_id INTEGER,
     processing_status TEXT NOT NULL DEFAULT 'new' CHECK (processing_status IN ('new','in_progress','task_created','archived')),
+    category TEXT NOT NULL DEFAULT 'other',
+    category_source TEXT NOT NULL DEFAULT 'auto' CHECK (category_source IN ('auto','manual')),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (receiver_id) REFERENCES wa_receivers(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (client_id) REFERENCES clients(id) ON UPDATE CASCADE ON DELETE RESTRICT
@@ -280,6 +284,17 @@ const COLUMN_MIGRATIONS = [
     column: 'regenerate_requested',
     definition: 'regenerate_requested INTEGER NOT NULL DEFAULT 0',
   },
+  {
+    table: 'wa_messages',
+    column: 'category',
+    definition: "category TEXT NOT NULL DEFAULT 'other'",
+  },
+  {
+    table: 'wa_messages',
+    column: 'category_source',
+    definition:
+      "category_source TEXT NOT NULL DEFAULT 'auto' CHECK (category_source IN ('auto','manual'))",
+  },
 ];
 
 function tableExists(db, tableName) {
@@ -323,4 +338,6 @@ export function initializeDatabase(db) {
   if (shouldSeedDemoData(db)) {
     db.exec(DEMO_DATA_SQL);
   }
+
+  recalculateAutoCategories(db);
 }

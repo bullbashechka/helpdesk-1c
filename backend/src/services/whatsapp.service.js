@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { getDatabase } from '../db/database.js';
 import { extFromMime, resolveSafePath, storedName, writeAttachmentFile } from './wa-attachments.service.js';
 import { phonesMatch } from './phone.js';
+import { categorizeText } from './wa-categories.js';
 
 function isBlank(v) {
   return v === undefined || v === null || String(v).trim() === '';
@@ -87,11 +88,13 @@ export function ingestMessage(payload) {
       ? resolveGroupClient(db, group_name)
       : findClientByPhone(sender_phone);
 
+  const category = categorizeText(body);
+
   const result = db
     .prepare(
       `INSERT INTO wa_messages
-        (wa_message_id, receiver_id, sender_phone, sender_name, chat_type, group_name, body, wa_timestamp, client_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (wa_message_id, receiver_id, sender_phone, sender_name, chat_type, group_name, body, wa_timestamp, client_id, category, category_source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'auto')
        ON CONFLICT(wa_message_id) DO NOTHING`,
     )
     .run(
@@ -104,6 +107,7 @@ export function ingestMessage(payload) {
       body != null ? String(body) : null,
       String(wa_timestamp),
       clientId,
+      category,
     );
 
   const deduplicated = result.changes === 0;

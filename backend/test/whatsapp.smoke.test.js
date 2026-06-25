@@ -645,3 +645,76 @@ describe('WhatsApp задачи и архив', () => {
     assert.equal(response.status, 404);
   });
 });
+
+describe('категоризация при ingest', () => {
+  test('сообщение со словом «проблема» → category=problem, category_source=auto', async () => {
+    const { getDatabase } = await import('../src/db/database.js');
+    const { payload } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_CAT_PROBLEM_1',
+        body: 'У нас проблема с базой данных 1С',
+      }),
+    });
+    const row = getDatabase()
+      .prepare('SELECT category, category_source FROM wa_messages WHERE id = ?')
+      .get(payload.id);
+    assert.equal(row.category, 'problem');
+    assert.equal(row.category_source, 'auto');
+  });
+
+  test('сообщение без текста (только вложение) → category=other, category_source=auto', async () => {
+    const { getDatabase } = await import('../src/db/database.js');
+    const { payload } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_CAT_NO_TEXT_1',
+        body: null,
+        attachments: [{ kind: 'photo', availability: 'not_stored' }],
+      }),
+    });
+    const row = getDatabase()
+      .prepare('SELECT category, category_source FROM wa_messages WHERE id = ?')
+      .get(payload.id);
+    assert.equal(row.category, 'other');
+    assert.equal(row.category_source, 'auto');
+  });
+
+  test('повторный ingest не перезаписывает ручную категорию', async () => {
+    const { getDatabase } = await import('../src/db/database.js');
+    const { payload: first } = await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_CAT_DEDUP_1',
+        body: 'обычный вопрос по работе',
+      }),
+    });
+    // Имитируем ручное переназначение оператором
+    getDatabase()
+      .prepare("UPDATE wa_messages SET category = 'problem', category_source = 'manual' WHERE id = ?")
+      .run(first.id);
+
+    // Повторный ingest (тот же wa_message_id) — дедуп
+    await request('/whatsapp/ingest', {
+      method: 'POST',
+      headers: VALID_TOKEN,
+      body: JSON.stringify({
+        ...baseMessage,
+        wa_message_id: 'false_CAT_DEDUP_1',
+        body: 'обычный вопрос по работе',
+      }),
+    });
+
+    const row = getDatabase()
+      .prepare('SELECT category, category_source FROM wa_messages WHERE id = ?')
+      .get(first.id);
+    assert.equal(row.category, 'problem');
+    assert.equal(row.category_source, 'manual');
+  });
+});
