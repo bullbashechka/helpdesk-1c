@@ -647,7 +647,7 @@ describe('WhatsApp задачи и архив', () => {
 });
 
 describe('категоризация при ingest', () => {
-  test('сообщение со словом «проблема» → category=problem, category_source=auto', async () => {
+  test('сообщение с упоминанием «@ГЕМ» → category=problem, category_source=auto', async () => {
     const { getDatabase } = await import('../src/db/database.js');
     const { payload } = await request('/whatsapp/ingest', {
       method: 'POST',
@@ -655,7 +655,7 @@ describe('категоризация при ingest', () => {
       body: JSON.stringify({
         ...baseMessage,
         wa_message_id: 'false_CAT_PROBLEM_1',
-        body: 'У нас проблема с базой данных 1С',
+        body: 'Коллеги @ГЕМ, нужна помощь с базой данных 1С',
       }),
     });
     const row = getDatabase()

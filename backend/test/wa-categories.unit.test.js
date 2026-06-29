@@ -28,46 +28,42 @@ after(() => {
 
 // ── Чистые функции ────────────────────────────────────────────────────────────
 
-describe('categorizeText — падежи «проблем*»', () => {
-  for (const word of ['проблема', 'проблемы', 'проблему', 'проблемой', 'проблеме', 'проблем']) {
-    test(word, () => assert.equal(categorizeText(word), 'problem'));
-  }
-});
-
-describe('categorizeText — хэштег', () => {
-  test('#проблема', () => assert.equal(categorizeText('#проблема'), 'problem'));
-  test('##проблема', () => assert.equal(categorizeText('##проблема'), 'problem'));
+describe('categorizeText — упоминание «@ГЕМ»', () => {
+  test('@ГЕМ', () => assert.equal(categorizeText('@ГЕМ'), 'problem'));
+  test('@гем', () => assert.equal(categorizeText('@гем'), 'problem'));
+  test('@Гем', () => assert.equal(categorizeText('@Гем'), 'problem'));
+  test('@ГЕМ в составе фразы', () => assert.equal(categorizeText('срочно для @ГЕМ помогите'), 'problem'));
 });
 
 describe('categorizeText — регистр', () => {
-  test('ПРОБЛЕМА', () => assert.equal(categorizeText('ПРОБЛЕМА'), 'problem'));
-  test('Проблема', () => assert.equal(categorizeText('Проблема'), 'problem'));
+  test('@ГЕМ', () => assert.equal(categorizeText('@ГЕМ'), 'problem'));
+  test('@гЕм', () => assert.equal(categorizeText('@гЕм'), 'problem'));
 });
 
 describe('categorizeText — хвост знаков препинания', () => {
-  test('проблема!!!', () => assert.equal(categorizeText('проблема!!!'), 'problem'));
-  test('проблема,', () => assert.equal(categorizeText('проблема,'), 'problem'));
+  test('@ГЕМ!!!', () => assert.equal(categorizeText('@ГЕМ!!!'), 'problem'));
+  test('@ГЕМ,', () => assert.equal(categorizeText('@ГЕМ,'), 'problem'));
 });
 
 describe('categorizeText — многострочность', () => {
-  test('слово на второй строке', () => assert.equal(categorizeText('строка один\nпроблема'), 'problem'));
-  test('таб как разделитель', () => assert.equal(categorizeText('есть\tпроблема'), 'problem'));
+  test('упоминание на второй строке', () => assert.equal(categorizeText('строка один\n@ГЕМ'), 'problem'));
+  test('таб как разделитель', () => assert.equal(categorizeText('коллеги\t@ГЕМ'), 'problem'));
 });
 
 describe('categorizeText — пограничные совпадения', () => {
-  test('проблематично → problem', () => assert.equal(categorizeText('проблематично'), 'problem'));
-  test('беспроблемный → other (нет ложного срабатывания)', () => assert.equal(categorizeText('беспроблемный'), 'other'));
+  test('@ГЕМ-СК → problem (совпадение по началу слова)', () => assert.equal(categorizeText('@ГЕМ-СК'), 'problem'));
 });
 
 describe('categorizeText — негативные случаи', () => {
   test('обычное сообщение → other', () => assert.equal(categorizeText('добрый день, когда отчёт'), 'other'));
-  test('беспроблемный → other', () => assert.equal(categorizeText('беспроблемный'), 'other'));
+  test('почта user@гем.kz → other (не начинается с @гем)', () => assert.equal(categorizeText('пишите на user@гем.kz'), 'other'));
+  test('слово «гем» без @ → other', () => assert.equal(categorizeText('гематоген закончился'), 'other'));
+  test('слово «проблема» больше не триггер → other', () => assert.equal(categorizeText('у нас проблема'), 'other'));
 });
 
 describe('categorizeText — обрамление спереди (осознанный компромисс)', () => {
-  test('(проблема) → other', () => assert.equal(categorizeText('(проблема)'), 'other'));
-  test('"проблема" → other', () => assert.equal(categorizeText('"проблема"'), 'other'));
-  test('...проблема → other', () => assert.equal(categorizeText('...проблема'), 'other'));
+  test('(@ГЕМ) → other', () => assert.equal(categorizeText('(@ГЕМ)'), 'other'));
+  test('"@ГЕМ" → other', () => assert.equal(categorizeText('"@ГЕМ"'), 'other'));
 });
 
 describe('categorizeText — нет текста', () => {

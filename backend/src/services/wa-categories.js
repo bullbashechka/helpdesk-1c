@@ -1,5 +1,5 @@
 const RAW_CATEGORIES = [
-  { code: 'problem', label: 'Проблема', stems: ['проблем'] },
+  { code: 'problem', label: 'ГЕМ', stems: ['@гем'] },
   { code: 'other', label: 'Прочее', stems: [] },
 ];
 
