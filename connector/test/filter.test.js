@@ -13,6 +13,23 @@ function isGroupChat(msg) {
   return msg.from?.endsWith('@g.us') ?? false;
 }
 
+// Зеркало логики из wa-client.js: групповое сообщение принимается только при
+// явном «@ГЕМ» (правило совпадает с категоризацией на backend).
+function hasGemMention(text) {
+  if (!text) return false;
+  return String(text)
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.replace(/^#+/, ''))
+    .some((word) => word.startsWith('@гем'));
+}
+
+// Итоговый гейт для группового канала: true — сообщение отбрасывается.
+function skipGroupWithoutGem(msg) {
+  return isGroupChat(msg) && !hasGemMention(msg.body);
+}
+
 function normalizeJid(jid) {
   if (!jid) return '';
   return jid.includes('@') ? jid.split('@')[0] : jid;
@@ -73,6 +90,44 @@ describe('message filter', () => {
     assert.equal(payload.chat_type, 'group');
     assert.equal(payload.sender_phone, '77071234567'); // author, not group JID
     assert.equal(payload.group_name, '120363000000');
+  });
+});
+
+describe('групповой фильтр @ГЕМ', () => {
+  const group = (body) =>
+    makeMsg({ from: '120363000000@g.us', author: '77071234567@c.us', body });
+  const dm = (body) => makeMsg({ from: '77011001010@c.us', author: null, body });
+
+  test('группа с @ГЕМ → принимается', () => {
+    assert.equal(skipGroupWithoutGem(group('Коллеги @ГЕМ, нужна помощь')), false);
+  });
+
+  test('группа с @ГЕМ в любом регистре → принимается', () => {
+    assert.equal(skipGroupWithoutGem(group('@гем срочно')), false);
+  });
+
+  test('группа с @ГЕМ-СК (хвост) → принимается', () => {
+    assert.equal(skipGroupWithoutGem(group('@ГЕМ-СК вопрос')), false);
+  });
+
+  test('группа без @ГЕМ → отбрасывается', () => {
+    assert.equal(skipGroupWithoutGem(group('Добрый день, подтвердили оплату')), true);
+  });
+
+  test('группа без текста (только вложение) → отбрасывается', () => {
+    assert.equal(skipGroupWithoutGem(group(null)), true);
+  });
+
+  test('группа с user@гем (внутри слова) → отбрасывается, нет ложного срабатывания', () => {
+    assert.equal(skipGroupWithoutGem(group('пишите на user@гем.kz')), true);
+  });
+
+  test('ЛС без @ГЕМ → принимается (личные проходят всегда)', () => {
+    assert.equal(skipGroupWithoutGem(dm('обычный вопрос')), false);
+  });
+
+  test('ЛС с @ГЕМ → принимается', () => {
+    assert.equal(skipGroupWithoutGem(dm('@ГЕМ помогите')), false);
   });
 });
 

@@ -35,6 +35,20 @@ function isGroupChat(msg) {
   return msg.from?.endsWith('@g.us') ?? false;
 }
 
+// Групповое сообщение принимается только при явном упоминании «@ГЕМ».
+// Правило совпадает с категоризацией на backend (wa-categories.js): нижний
+// регистр, разбивка по пробелам, снятие ведущих «#», слово начинается с «@гем».
+const GEM_MENTION_STEM = '@гем';
+function hasGemMention(text) {
+  if (!text) return false;
+  return String(text)
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.replace(/^#+/, ''))
+    .some((word) => word.startsWith(GEM_MENTION_STEM));
+}
+
 // Отображаемое имя (subject) группы. msg.from — это JID группы
 // (<id>@g.us), а не её название, поэтому берём имя из чата.
 // Откат на ID группы, если subject недоступен.
@@ -154,6 +168,9 @@ export function createWaClient({ queue, statusReporter }) {
       const msgTime = new Date(msg.timestamp * 1000).toISOString();
       if (msgTime < firstAuthAt) return;
     }
+
+    // Группы: принимаем только при явном «@ГЕМ». Личные чаты проходят всегда.
+    if (isGroupChat(msg) && !hasGemMention(msg.body)) return;
 
     const payload = await buildPayload(msg, config.receiverId);
     payload.attachments = await buildAttachments(msg);
