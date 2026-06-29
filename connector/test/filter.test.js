@@ -13,21 +13,43 @@ function isGroupChat(msg) {
   return msg.from?.endsWith('@g.us') ?? false;
 }
 
-// Зеркало логики из wa-client.js: групповое сообщение принимается только при
-// явном «@ГЕМ» (правило совпадает с категоризацией на backend).
-function hasGemMention(text) {
-  if (!text) return false;
-  return String(text)
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.replace(/^#+/, ''))
-    .some((word) => word.startsWith('@гем'));
+// Зеркало jidToDigits/mentionsConfiguredNumber из wa-client.js.
+function jidToDigits(id) {
+  if (!id) return '';
+  const s = typeof id === 'string' ? id : id._serialized || id.user || '';
+  return String(s).replace(/\D/g, '');
+}
+
+// Все цифровые идентификаторы резолвнутого контакта-упоминания.
+function contactNumbers(contact) {
+  return [jidToDigits(contact?.id), jidToDigits(contact?.number)].filter(Boolean);
+}
+
+const TEST_GEM_NUMBERS = ['77057569731'];
+// WhatsApp перешёл на LID: mentionedIds содержит скрытый «<id>@lid», а не телефон.
+// При промахе по сырым id резолвим упоминания в контакты и сверяем реальный номер.
+async function mentionsConfiguredNumber(msg, numbers = TEST_GEM_NUMBERS) {
+  if (numbers.length === 0) return false;
+  const rawDigits = (msg.mentionedIds ?? []).map(jidToDigits);
+  if (numbers.some((num) => rawDigits.includes(num))) return true;
+  if (typeof msg.getMentions !== 'function') return false;
+  try {
+    const contacts = (await msg.getMentions()) ?? [];
+    const resolved = contacts.flatMap(contactNumbers);
+    return numbers.some((num) => resolved.includes(num));
+  } catch {
+    return false;
+  }
+}
+
+// Группа проходит только при реальном теге контакта ГЕМ (текст не триггер).
+async function groupMessagePasses(msg) {
+  return mentionsConfiguredNumber(msg);
 }
 
 // Итоговый гейт для группового канала: true — сообщение отбрасывается.
-function skipGroupWithoutGem(msg) {
-  return isGroupChat(msg) && !hasGemMention(msg.body);
+async function skipGroupWithoutGem(msg) {
+  return isGroupChat(msg) && !(await groupMessagePasses(msg));
 }
 
 function normalizeJid(jid) {
@@ -93,41 +115,85 @@ describe('message filter', () => {
   });
 });
 
-describe('групповой фильтр @ГЕМ', () => {
+describe('групповой фильтр: только тег ГЕМ', () => {
   const group = (body) =>
     makeMsg({ from: '120363000000@g.us', author: '77071234567@c.us', body });
   const dm = (body) => makeMsg({ from: '77011001010@c.us', author: null, body });
 
-  test('группа с @ГЕМ → принимается', () => {
-    assert.equal(skipGroupWithoutGem(group('Коллеги @ГЕМ, нужна помощь')), false);
+  test('группа с тегом нашего номера (mentionedIds, строка) → принимается', async () => {
+    const msg = group('@77057569731 помогите');
+    msg.mentionedIds = ['77057569731@c.us'];
+    assert.equal(await skipGroupWithoutGem(msg), false);
   });
 
-  test('группа с @ГЕМ в любом регистре → принимается', () => {
-    assert.equal(skipGroupWithoutGem(group('@гем срочно')), false);
+  test('группа с тегом нашего номера (mentionedIds, объект _serialized) → принимается', async () => {
+    const msg = group('@77057569731 помогите');
+    msg.mentionedIds = [{ _serialized: '77057569731@c.us' }];
+    assert.equal(await skipGroupWithoutGem(msg), false);
   });
 
-  test('группа с @ГЕМ-СК (хвост) → принимается', () => {
-    assert.equal(skipGroupWithoutGem(group('@ГЕМ-СК вопрос')), false);
+  test('группа с LID-тегом, резолвится в наш телефон → принимается', async () => {
+    // WhatsApp прислал скрытый LID, а не телефон. getMentions() резолвит его
+    // в контакт с реальным номером 77057569731 (id заменён на телефон).
+    const msg = group('@279688874356736 помогите');
+    msg.mentionedIds = ['279688874356736@lid'];
+    msg.getMentions = async () => [
+      { id: { _serialized: '77057569731@c.us' }, number: '77057569731' },
+    ];
+    assert.equal(await skipGroupWithoutGem(msg), false);
   });
 
-  test('группа без @ГЕМ → отбрасывается', () => {
-    assert.equal(skipGroupWithoutGem(group('Добрый день, подтвердили оплату')), true);
+  test('группа с LID-тегом, резолв по полю number → принимается', async () => {
+    const msg = group('@279688874356736 помогите');
+    msg.mentionedIds = ['279688874356736@lid'];
+    msg.getMentions = async () => [{ id: { _serialized: '99999@lid' }, number: '77057569731' }];
+    assert.equal(await skipGroupWithoutGem(msg), false);
   });
 
-  test('группа без текста (только вложение) → отбрасывается', () => {
-    assert.equal(skipGroupWithoutGem(group(null)), true);
+  test('группа с тегом чужого номера → отбрасывается', async () => {
+    const msg = group('@79990001122 привет');
+    msg.mentionedIds = ['79990001122@c.us'];
+    assert.equal(await skipGroupWithoutGem(msg), true);
   });
 
-  test('группа с user@гем (внутри слова) → отбрасывается, нет ложного срабатывания', () => {
-    assert.equal(skipGroupWithoutGem(group('пишите на user@гем.kz')), true);
+  test('группа с LID-тегом чужого контакта → отбрасывается', async () => {
+    const msg = group('@83386907529444 не работает');
+    msg.mentionedIds = ['83386907529444@lid'];
+    msg.getMentions = async () => [
+      { id: { _serialized: '79990001122@c.us' }, number: '79990001122' },
+    ];
+    assert.equal(await skipGroupWithoutGem(msg), true);
   });
 
-  test('ЛС без @ГЕМ → принимается (личные проходят всегда)', () => {
-    assert.equal(skipGroupWithoutGem(dm('обычный вопрос')), false);
+  test('группа с текстом «@ГЕМ» без тега → отбрасывается (текст не триггер в группах)', async () => {
+    assert.equal(await skipGroupWithoutGem(group('Коллеги @ГЕМ, нужна помощь')), true);
   });
 
-  test('ЛС с @ГЕМ → принимается', () => {
-    assert.equal(skipGroupWithoutGem(dm('@ГЕМ помогите')), false);
+  test('группа без упоминаний → отбрасывается', async () => {
+    assert.equal(await skipGroupWithoutGem(group('Добрый день, подтвердили оплату')), true);
+  });
+
+  test('группа без текста (только вложение) → отбрасывается', async () => {
+    assert.equal(await skipGroupWithoutGem(group(null)), true);
+  });
+
+  test('группа с LID-тегом, getMentions падает → отбрасывается, без краха', async () => {
+    const msg = group('@279688874356736 помогите');
+    msg.mentionedIds = ['279688874356736@lid'];
+    msg.getMentions = async () => {
+      throw new Error('pupPage detached');
+    };
+    await assert.doesNotReject(async () => {
+      assert.equal(await skipGroupWithoutGem(msg), true);
+    });
+  });
+
+  test('ЛС проходит всегда — без тега и без «@ГЕМ»', async () => {
+    assert.equal(await skipGroupWithoutGem(dm('обычный вопрос')), false);
+  });
+
+  test('ЛС с любым текстом → принимается (личные проходят всегда)', async () => {
+    assert.equal(await skipGroupWithoutGem(dm('@ГЕМ помогите')), false);
   });
 });
 

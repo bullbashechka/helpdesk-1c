@@ -35,18 +35,45 @@ function isGroupChat(msg) {
   return msg.from?.endsWith('@g.us') ?? false;
 }
 
-// Групповое сообщение принимается только при явном упоминании «@ГЕМ».
-// Правило совпадает с категоризацией на backend (wa-categories.js): нижний
-// регистр, разбивка по пробелам, снятие ведущих «#», слово начинается с «@гем».
-const GEM_MENTION_STEM = '@гем';
-function hasGemMention(text) {
-  if (!text) return false;
-  return String(text)
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.replace(/^#+/, ''))
-    .some((word) => word.startsWith(GEM_MENTION_STEM));
+// Приводим WhatsApp-идентификатор (строка «7705...@c.us» или объект с
+// _serialized) к одним цифрам для сравнения с настроенными номерами.
+function jidToDigits(id) {
+  if (!id) return '';
+  const s = typeof id === 'string' ? id : id._serialized || id.user || '';
+  return String(s).replace(/\D/g, '');
+}
+
+// Все цифровые идентификаторы резолвнутого контакта-упоминания. При LID-адресации
+// getMentions() возвращает контакт, у которого id уже заменён на реальный телефон
+// (см. WWebJS.getContactModel), поэтому проверяем и id, и number.
+function contactNumbers(contact) {
+  return [jidToDigits(contact?.id), jidToDigits(contact?.number)].filter(Boolean);
+}
+
+// Сообщение тегает один из наших номеров (реальное WhatsApp-упоминание).
+// В body такого тега лежит «@<id>», а не «@ГЕМ», поэтому ловим по упоминаниям.
+// WhatsApp перешёл на LID: mentionedIds содержит скрытый «<id>@lid», а не телефон,
+// поэтому при промахе по сырым id резолвим упоминания в контакты и сверяем номер.
+async function mentionsConfiguredNumber(msg) {
+  if (config.gemMentionNumbers.length === 0) return false;
+  const rawDigits = (msg.mentionedIds ?? []).map(jidToDigits);
+  if (config.gemMentionNumbers.some((num) => rawDigits.includes(num))) return true;
+  if (typeof msg.getMentions !== 'function') return false;
+  try {
+    const contacts = (await msg.getMentions()) ?? [];
+    const numbers = contacts.flatMap(contactNumbers);
+    return config.gemMentionNumbers.some((num) => numbers.includes(num));
+  } catch (err) {
+    console.warn(`[wa-client] getMentions failed: ${err?.message ?? err}`);
+    return false;
+  }
+}
+
+// Итоговое правило для группового канала: только реальный тег контакта ГЕМ.
+// Текстовое «@ГЕМ» намеренно не используется — в WhatsApp «@» всегда
+// превращается в тег участника, поэтому набрать его обычным текстом нельзя.
+async function groupMessagePasses(msg) {
+  return mentionsConfiguredNumber(msg);
 }
 
 // Отображаемое имя (subject) группы. msg.from — это JID группы
@@ -158,6 +185,37 @@ export function createWaClient({ queue, statusReporter }) {
   });
 
   client.on('message', async (msg) => {
+    // [DEBUG TEMP] Лог любого входящего до фильтров в файл — для диагностики @ГЕМ.
+    try {
+      const isGroup = msg.from?.endsWith('@g.us') ?? false;
+      const mentionsUs = await mentionsConfiguredNumber(msg);
+      let resolvedMentions = null;
+      try {
+        resolvedMentions = (await msg.getMentions())?.map((c) => ({
+          id: c?.id?._serialized ?? null,
+          number: c?.number ?? null,
+        }));
+      } catch {
+        /* getMentions может упасть — для лога это не критично */
+      }
+      const line = JSON.stringify({
+        at: new Date().toISOString(),
+        from: msg.from,
+        author: msg.author ?? null,
+        type: msg.type,
+        isGroup,
+        body: msg.body ?? null,
+        mentionedIds: msg.mentionedIds ?? null,
+        resolvedMentions,
+        gemNumbers: config.gemMentionNumbers,
+        mentionsUs,
+        groupPasses: isGroup ? mentionsUs : '(личный — всегда)',
+      });
+      writeFileSync(join(config.sessionDir, '..', 'wa-debug.log'), line + '\n', { flag: 'a' });
+    } catch (e) {
+      writeFileSync(join(config.sessionDir, '..', 'wa-debug.log'), `LOG_FAIL: ${e?.message}\n`, { flag: 'a' });
+    }
+
     // Filter: skip outgoing, status broadcasts, and system messages.
     if (msg.fromMe) return;
     if (msg.from === 'status@broadcast') return;
@@ -169,8 +227,9 @@ export function createWaClient({ queue, statusReporter }) {
       if (msgTime < firstAuthAt) return;
     }
 
-    // Группы: принимаем только при явном «@ГЕМ». Личные чаты проходят всегда.
-    if (isGroupChat(msg) && !hasGemMention(msg.body)) return;
+    // Группы: принимаем только при явном «@ГЕМ» (текст или тег нашего номера).
+    // Личные чаты проходят всегда.
+    if (isGroupChat(msg) && !(await groupMessagePasses(msg))) return;
 
     const payload = await buildPayload(msg, config.receiverId);
     payload.attachments = await buildAttachments(msg);
