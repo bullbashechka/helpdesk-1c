@@ -73,7 +73,7 @@ cp .env.example .env
 
 ```bash
 cp connector/.env.example connector/.env
-# Указать свой номер WhatsApp в RECEIVER_PHONE, например: RECEIVER_PHONE=77071234567
+# Указать номер(а) для тега @ГЕМ в GEM_MENTION_NUMBERS, например: GEM_MENTION_NUMBERS=77071234567
 ```
 
 Установить зависимости (если не установлены):
@@ -175,7 +175,7 @@ Standalone Node.js process (`npm run dev:connector`) that bridges WhatsApp and t
 - `queue.js` — file-based queue (`connector/data/queue/`): each message is a JSON file named after its `wa_message_id`. Survives connector restarts.
 - `sender.js` — flushes the queue by POSTing to `POST /api/whatsapp/ingest` with exponential-backoff retry on failures.
 - `status.js` — periodic heartbeat: POSTs `{ state, qr_data_url }` to `POST /api/whatsapp/status` every `heartbeatIntervalMs`.
-- `config.js` — reads env vars: `BACKEND_URL`, `CONNECTOR_TOKEN`, `RECEIVER_PHONE`, `RECEIVER_ID`, `SESSION_DIR`, `QUEUE_DIR`.
+- `config.js` — reads env vars: `BACKEND_URL`, `CONNECTOR_TOKEN`, `GEM_MENTION_NUMBERS`, `RECEIVER_ID`, `SESSION_DIR`, `QUEUE_DIR`.
 
 Connector tests (`test/filter.test.js`, `test/queue.test.js`) are pure unit tests — they do **not** import `wa-client.js` or Puppeteer.
 
